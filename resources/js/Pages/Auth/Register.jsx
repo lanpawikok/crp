@@ -1,9 +1,6 @@
-import InputError from '@/Components/InputError';
-import InputLabel from '@/Components/InputLabel';
-import PrimaryButton from '@/Components/PrimaryButton';
-import TextInput from '@/Components/TextInput';
-import GuestLayout from '@/Layouts/GuestLayout';
 import { Head, Link, useForm } from '@inertiajs/react';
+import { route } from 'ziggy-js';
+
 
 export default function Register() {
     const { data, setData, post, processing, errors, reset } = useForm({
@@ -11,6 +8,7 @@ export default function Register() {
         email: '',
         password: '',
         password_confirmation: '',
+        terms: false,
     });
 
     const submit = (e) => {
@@ -22,99 +20,338 @@ export default function Register() {
     };
 
     return (
-        <GuestLayout>
+        <>
             <Head title="Register" />
 
-            <form onSubmit={submit}>
-                <div>
-                    <InputLabel htmlFor="name" value="Name" />
+            <div className="min-h-screen bg-[#09090B] text-[#e5e1e4] flex flex-col relative overflow-x-hidden">
 
-                    <TextInput
-                        id="name"
-                        name="name"
-                        value={data.name}
-                        className="mt-1 block w-full"
-                        autoComplete="name"
-                        isFocused={true}
-                        onChange={(e) => setData('name', e.target.value)}
-                        required
-                    />
+                {/* Background */}
+                <div
+                    className="fixed inset-0 pointer-events-none z-0"
+                    style={{
+                        backgroundImage: `
+                            linear-gradient(to right, rgba(255,255,255,0.03) 1px, transparent 1px),
+                            linear-gradient(to bottom, rgba(255,255,255,0.03) 1px, transparent 1px)
+                        `,
+                        backgroundSize: '32px 32px',
+                    }}
+                />
 
-                    <InputError message={errors.name} className="mt-2" />
-                </div>
+                <div className="fixed top-[-20%] left-[-10%] w-[50%] h-[50%] bg-indigo-400/10 rounded-full blur-[120px] pointer-events-none z-0" />
 
-                <div className="mt-4">
-                    <InputLabel htmlFor="email" value="Email" />
+                <div className="fixed bottom-[-20%] right-[-10%] w-[40%] h-[40%] bg-blue-400/10 rounded-full blur-[100px] pointer-events-none z-0" />
 
-                    <TextInput
-                        id="email"
-                        type="email"
-                        name="email"
-                        value={data.email}
-                        className="mt-1 block w-full"
-                        autoComplete="username"
-                        onChange={(e) => setData('email', e.target.value)}
-                        required
-                    />
+                {/* Main */}
+                <main className="flex-grow flex items-center justify-center relative z-10 px-5 md:px-10 py-24">
 
-                    <InputError message={errors.email} className="mt-2" />
-                </div>
+                    <div className="w-full max-w-md bg-[#18181B]/40 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl relative overflow-hidden">
 
-                <div className="mt-4">
-                    <InputLabel htmlFor="password" value="Password" />
+                        {/* Glow */}
+                        <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-indigo-300/50 to-transparent" />
 
-                    <TextInput
-                        id="password"
-                        type="password"
-                        name="password"
-                        value={data.password}
-                        className="mt-1 block w-full"
-                        autoComplete="new-password"
-                        onChange={(e) => setData('password', e.target.value)}
-                        required
-                    />
+                        <div className="p-8 md:p-10 flex flex-col gap-8">
 
-                    <InputError message={errors.password} className="mt-2" />
-                </div>
+                            {/* Header */}
+                            <div className="text-center flex flex-col gap-2">
 
-                <div className="mt-4">
-                    <InputLabel
-                        htmlFor="password_confirmation"
-                        value="Confirm Password"
-                    />
+                                <h1 className="text-3xl md:text-4xl font-bold">
+                                    Join Utilify
+                                </h1>
 
-                    <TextInput
-                        id="password_confirmation"
-                        type="password"
-                        name="password_confirmation"
-                        value={data.password_confirmation}
-                        className="mt-1 block w-full"
-                        autoComplete="new-password"
-                        onChange={(e) =>
-                            setData('password_confirmation', e.target.value)
-                        }
-                        required
-                    />
+                                <p className="text-sm text-gray-400">
+                                    Initialize your Web3 Hub account.
+                                </p>
 
-                    <InputError
-                        message={errors.password_confirmation}
-                        className="mt-2"
-                    />
-                </div>
+                            </div>
 
-                <div className="mt-4 flex items-center justify-end">
-                    <Link
-                        href={route('login')}
-                        className="rounded-md text-sm text-gray-600 underline hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-                    >
-                        Already registered?
-                    </Link>
+                            {/* Register Form */}
+                            <form
+                                onSubmit={submit}
+                                className="flex flex-col gap-5"
+                            >
 
-                    <PrimaryButton className="ms-4" disabled={processing}>
-                        Register
-                    </PrimaryButton>
-                </div>
-            </form>
-        </GuestLayout>
+                                {/* Name */}
+                                <div className="flex flex-col gap-2">
+
+                                    <label
+                                        htmlFor="name"
+                                        className="text-xs font-medium text-gray-400 uppercase tracking-wider"
+                                    >
+                                        Name
+                                    </label>
+
+                                    <input
+                                        id="name"
+                                        type="text"
+                                        value={data.name}
+                                        onChange={(e) =>
+                                            setData('name', e.target.value)
+                                        }
+                                        placeholder="Your name"
+                                        required
+                                        className="bg-[#09090B] border border-white/10 text-white rounded-lg px-4 py-3 focus:border-indigo-300 focus:outline-none focus:ring-1 focus:ring-indigo-300 transition"
+                                    />
+
+                                    {errors.name && (
+                                        <p className="text-red-400 text-sm">
+                                            {errors.name}
+                                        </p>
+                                    )}
+
+                                </div>
+
+                                {/* Email */}
+                                <div className="flex flex-col gap-2">
+
+                                    <label
+                                        htmlFor="email"
+                                        className="text-xs font-medium text-gray-400 uppercase tracking-wider"
+                                    >
+                                        Email Address
+                                    </label>
+
+                                    <input
+                                        id="email"
+                                        type="email"
+                                        value={data.email}
+                                        onChange={(e) =>
+                                            setData('email', e.target.value)
+                                        }
+                                        placeholder="pilot@utilify.xyz"
+                                        required
+                                        autoComplete="username"
+                                        className="bg-[#09090B] border border-white/10 text-white rounded-lg px-4 py-3 focus:border-indigo-300 focus:outline-none focus:ring-1 focus:ring-indigo-300 transition"
+                                    />
+
+                                    {errors.email && (
+                                        <p className="text-red-400 text-sm">
+                                            {errors.email}
+                                        </p>
+                                    )}
+
+                                </div>
+
+                                {/* Password */}
+                                <div className="flex flex-col gap-2">
+
+                                    <label
+                                        htmlFor="password"
+                                        className="text-xs font-medium text-gray-400 uppercase tracking-wider"
+                                    >
+                                        Password
+                                    </label>
+
+                                    <input
+                                        id="password"
+                                        type="password"
+                                        value={data.password}
+                                        onChange={(e) =>
+                                            setData('password', e.target.value)
+                                        }
+                                        placeholder="••••••••"
+                                        required
+                                        autoComplete="new-password"
+                                        className="bg-[#09090B] border border-white/10 text-white rounded-lg px-4 py-3 focus:border-indigo-300 focus:outline-none focus:ring-1 focus:ring-indigo-300 transition"
+                                    />
+
+                                    {errors.password && (
+                                        <p className="text-red-400 text-sm">
+                                            {errors.password}
+                                        </p>
+                                    )}
+
+                                </div>
+
+                                {/* Confirm Password */}
+                                <div className="flex flex-col gap-2">
+
+                                    <label
+                                        htmlFor="password_confirmation"
+                                        className="text-xs font-medium text-gray-400 uppercase tracking-wider"
+                                    >
+                                        Confirm Password
+                                    </label>
+
+                                    <input
+                                        id="password_confirmation"
+                                        type="password"
+                                        value={data.password_confirmation}
+                                        onChange={(e) =>
+                                            setData(
+                                                'password_confirmation',
+                                                e.target.value
+                                            )
+                                        }
+                                        placeholder="••••••••"
+                                        required
+                                        autoComplete="new-password"
+                                        className="bg-[#09090B] border border-white/10 text-white rounded-lg px-4 py-3 focus:border-indigo-300 focus:outline-none focus:ring-1 focus:ring-indigo-300 transition"
+                                    />
+
+                                    {errors.password_confirmation && (
+                                        <p className="text-red-400 text-sm">
+                                            {errors.password_confirmation}
+                                        </p>
+                                    )}
+
+                                </div>
+
+                                {/* Terms */}
+                                <div className="flex items-start gap-3 mt-2">
+
+                                    <input
+                                        id="terms"
+                                        type="checkbox"
+                                        checked={data.terms}
+                                        onChange={(e) =>
+                                            setData(
+                                                'terms',
+                                                e.target.checked
+                                            )
+                                        }
+                                        className="mt-1 w-4 h-4 accent-indigo-300"
+                                    />
+
+                                    <label
+                                        htmlFor="terms"
+                                        className="text-sm text-gray-400"
+                                    >
+                                        I agree to the{' '}
+
+                                        <a
+                                            href="#"
+                                            className="text-indigo-300 hover:text-indigo-200 transition"
+                                        >
+                                            Terms of Service
+                                        </a>
+
+                                        {' '}and{' '}
+
+                                        <a
+                                            href="#"
+                                            className="text-indigo-300 hover:text-indigo-200 transition"
+                                        >
+                                            Privacy Policy
+                                        </a>
+
+                                    </label>
+
+                                </div>
+
+                                {/* Register Button */}
+                                <button
+                                    type="submit"
+                                    disabled={processing}
+                                    className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-lg py-3 mt-4 transition active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {processing
+                                        ? 'Creating Account...'
+                                        : 'Register Account'}
+                                </button>
+
+                            </form>
+
+                            {/* Divider */}
+                            <div className="flex items-center gap-4">
+
+                                <div className="flex-grow h-px bg-white/10" />
+
+                                <span className="text-xs text-gray-500 uppercase tracking-widest">
+                                    Or
+                                </span>
+
+                                <div className="flex-grow h-px bg-white/10" />
+
+                            </div>
+
+                            {/* Wallet */}
+                            <button
+                                type="button"
+                                className="w-full flex items-center justify-center gap-3 border border-white/10 bg-[#18181B] hover:bg-[#2a2a2c] rounded-lg py-3 transition"
+                            >
+                                <span className="text-indigo-300">
+                                    ◈
+                                </span>
+
+                                <span className="font-semibold">
+                                    Connect Wallet
+                                </span>
+                            </button>
+
+                            {/* Login Link */}
+                            <div className="text-center mt-2">
+
+                                <p className="text-sm text-gray-400">
+
+                                    Already initialized?{' '}
+
+                                    <Link
+                                        href="login"
+                                        className="text-indigo-300 hover:text-indigo-200 font-bold transition"
+                                    >
+                                        Log In here
+                                    </Link>
+
+                                </p>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </main>
+
+                {/* Footer */}
+                <footer className="bg-[#131315] border-t border-white/10 w-full py-8 mt-auto relative z-10">
+
+                    <div className="flex flex-col md:flex-row justify-between items-center px-5 md:px-10 max-w-7xl mx-auto gap-4">
+
+                        <div className="text-lg font-semibold">
+                            Utilify
+                        </div>
+
+                        <div className="flex gap-6 text-xs">
+
+                            <a
+                                href="#"
+                                className="text-gray-400 hover:text-indigo-300 transition"
+                            >
+                                Privacy Policy
+                            </a>
+
+                            <a
+                                href="#"
+                                className="text-gray-400 hover:text-indigo-300 transition"
+                            >
+                                Terms of Service
+                            </a>
+
+                            <a
+                                href="#"
+                                className="text-gray-400 hover:text-indigo-300 transition"
+                            >
+                                Docs
+                            </a>
+
+                            <a
+                                href="#"
+                                className="text-gray-400 hover:text-indigo-300 transition"
+                            >
+                                Github
+                            </a>
+
+                        </div>
+
+                        <div className="text-xs text-gray-500">
+                            © 2026 Utilify Web3 Hub
+                        </div>
+
+                    </div>
+
+                </footer>
+
+            </div>
+        </>
     );
 }
