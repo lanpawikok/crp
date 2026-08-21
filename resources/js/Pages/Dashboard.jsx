@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { ConnectionProvider, WalletProvider, useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { WalletModalProvider, useWalletModal } from '@solana/wallet-adapter-react-ui';
 import { SolflareWalletAdapter } from '@solana/wallet-adapter-wallets';
@@ -10,14 +10,9 @@ import '@solana/wallet-adapter-react-ui/styles.css';
 
 const DEPOSIT_VAULT_ADDRESS = '8F6FkGNAwbdB3DveHnhjuozu5byyX8aBjUX73x9ncE5A';
 const FROM_TOKEN_GROUPS = [
-    { label: 'Top', tokens: ['SOL'] },
+    { label: 'Top', tokens: ['SOL', 'USDC', 'USDT'] },
     { label: 'Yield', tokens: ['stORE'] },
     { label: 'Others', tokens: ['ORE', 'ZEC'] },
-];
-const TO_TOKEN_GROUPS = [
-    { label: 'Top', tokens: ['USDC', 'USDT'] },
-    { label: 'Yield', tokens: ['stORE'] },
-    { label: 'Others', tokens: ['ZEC', 'ORE'] },
 ];
 const TOKEN_MINTS = {
     SOL: 'So11111111111111111111111111111111111111112',
@@ -37,6 +32,9 @@ const TOKEN_LOGOS = {
     SOL: 'https://cdn.jsdelivr.net/gh/solana-labs/token-list@main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png',
     USDC: 'https://cdn.jsdelivr.net/gh/solana-labs/token-list@main/assets/mainnet/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v/logo.png',
     USDT: 'https://cdn.jsdelivr.net/gh/solana-labs/token-list@main/assets/mainnet/Es9vMFrzaCERmJfrF4H2FYD4uF1qjQ7wN1YfH6mJg4T/logo.png',
+    stORE: 'https://www.privacycash.org/token_logos/store.png',
+    ORE: 'https://www.privacycash.org/token_logos/ore.png',
+    ZEC: 'https://www.privacycash.org/token_logos/zec.png',
 };
 const TOKEN_COLORS = {
     SOL: 'bg-[#8b8bff] text-[#17172a]',
@@ -65,9 +63,21 @@ function TokenLogo({ token, size = 'h-7 w-7' }) {
 
 function TokenSelect({ value, groups, onChange }) {
     const [isOpen, setIsOpen] = useState(false);
+    const selectorRef = useRef(null);
+
+    useEffect(() => {
+        const handleOutsideClick = (event) => {
+            if (selectorRef.current && !selectorRef.current.contains(event.target)) {
+                setIsOpen(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handleOutsideClick);
+        return () => document.removeEventListener('mousedown', handleOutsideClick);
+    }, []);
 
     return (
-        <div className="relative">
+        <div ref={selectorRef} className="relative">
             <button
                 type="button"
                 onClick={() => setIsOpen((open) => !open)}
@@ -186,8 +196,7 @@ function UtilifyApp() {
     const [tokenPrices, setTokenPrices] = useState({});
     const [isRateLoading, setIsRateLoading] = useState(false);
 
-    // State Private Balance & Form
-    const [privateBalance, setPrivateBalance] = useState(0.0);
+    // State wallet balance & deposit form
     const [depositAmount, setDepositAmount] = useState('');
     const [isTopUpOpen, setIsTopUpOpen] = useState(false);
     const [isDepositConfirmOpen, setIsDepositConfirmOpen] = useState(false);
@@ -262,33 +271,6 @@ function UtilifyApp() {
         return () => { isMounted = false; };
     }, [publicKey, connection]);
 
-    // Ambil Private Balance dari API Laravel
-    useEffect(() => {
-        if (!auth?.user) return;
-
-        let isMounted = true;
-        const fetchPrivateBalance = async () => {
-            try {
-                const res = await fetch('/api/private-balance', {
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest',
-                        'Accept': 'application/json',
-                    },
-                });
-                if (!res.ok) throw new Error('Network response was not ok');
-                const data = await res.json();
-                if (isMounted) {
-                    setPrivateBalance(parseFloat(data.balance || 0));
-                }
-            } catch (error) {
-                console.error('Gagal mengambil saldo privat:', error);
-            }
-        };
-
-        fetchPrivateBalance();
-        return () => { isMounted = false; };
-    }, [auth?.user]);
-
     // Fungsi Logout melalui Inertia
     const handleLogout = (e) => {
         e.preventDefault();
@@ -301,6 +283,23 @@ function UtilifyApp() {
         setPayAmount(receiveAmount);
         setReceiveAmount(payAmount);
     };
+
+    const handlePayTokenChange = (token) => {
+        setPayToken(token);
+        if (token !== 'SOL') {
+            setReceiveToken('SOL');
+        } else if (receiveToken === 'SOL') {
+            setReceiveToken('USDC');
+        }
+    };
+
+    const availableToGroups = payToken === 'SOL'
+        ? [
+            { label: 'Top', tokens: ['USDC', 'USDT'] },
+            { label: 'Yield', tokens: ['stORE'] },
+            { label: 'Others', tokens: ['ZEC', 'ORE'] },
+        ]
+        : [{ label: 'Top', tokens: ['SOL'] }];
 
     const handleMaxPayAmount = () => {
         if (payToken === 'SOL' && balance !== null) {
@@ -373,6 +372,7 @@ function UtilifyApp() {
 
             setSwapStatus('Mengonfirmasi transaksi di blockchain...');
             await connection.confirmTransaction(signature, 'confirmed');
+            setBalance((await connection.getBalance(publicKey) / LAMPORTS_PER_SOL).toFixed(4));
             alert(`Swap berhasil! Signature: ${signature.slice(0, 8)}...`);
         } catch (error) {
             console.error('Swap Error:', error);
@@ -418,32 +418,9 @@ function UtilifyApp() {
                 blockhash,
                 lastValidBlockHeight,
             }, 'processed');
-
-            const res = await fetch('/api/private-balance/deposit', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'X-CSRF-TOKEN': getCsrfToken(),
-                    'Accept': 'application/json',
-                },
-                credentials: 'same-origin',
-                body: JSON.stringify({
-                    amount,
-                    signature,
-                    wallet_address: publicKey.toBase58(),
-                }),
-            });
-
-            const data = await res.json();
-
-            if (res.ok && data.success) {
-                setPrivateBalance(parseFloat(data.new_balance));
-                setDepositAmount('');
-                alert(`Top Up Berhasil! Signature: ${signature.slice(0, 8)}...`);
-            } else {
-                throw new Error(data.message || `Server menolak deposit (HTTP ${res.status}).`);
-            }
+            setBalance((await connection.getBalance(publicKey) / LAMPORTS_PER_SOL).toFixed(4));
+            setDepositAmount('');
+            alert(`Top Up Berhasil! Signature: ${signature.slice(0, 8)}...`);
         } catch (error) {
             console.error('Error deposit:', error);
             const errorMessage = error?.message || '';
@@ -613,7 +590,7 @@ function UtilifyApp() {
                                             />
                                             <div className="flex items-center gap-2 shrink-0">
                                                 <button type="button" onClick={handleMaxPayAmount} className="text-[10px] font-mono text-[#c3c0ff] hover:text-white cursor-pointer">MAX</button>
-                                                <TokenSelect value={payToken} groups={FROM_TOKEN_GROUPS} onChange={setPayToken} />
+                                                <TokenSelect value={payToken} groups={FROM_TOKEN_GROUPS} onChange={handlePayTokenChange} />
                                             </div>
                                         </div>
                                     </div>
@@ -638,7 +615,7 @@ function UtilifyApp() {
                                                 readOnly
                                                 className="bg-transparent text-3xl font-semibold text-[#e5e1e4] outline-none min-w-0 w-full cursor-default"
                                             />
-                                            <TokenSelect value={receiveToken} groups={TO_TOKEN_GROUPS} onChange={setReceiveToken} />
+                                            <TokenSelect value={receiveToken} groups={availableToGroups} onChange={setReceiveToken} />
                                         </div>
                                     </div>
                                 </div>
@@ -686,8 +663,8 @@ function UtilifyApp() {
                                     </div>
                                 </div>
                                 <div className="text-xs text-gray-400 flex justify-between">
-                                    <span>Public Wallet: {publicKey ? (balance !== null ? `${balance} SOL` : 'Loading...') : '0.00'}</span>
-                                    <span>Private Balance: {privateBalance.toFixed(4)} SOL</span>
+                                    <span>Solana Wallet Balance</span>
+                                    <span>{publicKey ? (balance !== null ? `${balance} SOL` : 'Loading...') : '0.00 SOL'}</span>
                                 </div>
                                 <button
                                     onClick={handleDepositRequest}
