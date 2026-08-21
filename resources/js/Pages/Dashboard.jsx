@@ -2,13 +2,38 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { ConnectionProvider, WalletProvider, useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { WalletModalProvider, useWalletModal } from '@solana/wallet-adapter-react-ui';
 import { SolflareWalletAdapter } from '@solana/wallet-adapter-wallets';
-import { LAMPORTS_PER_SOL, PublicKey, SystemProgram, Transaction, VersionedTransaction } from '@solana/web3.js';
+import { WalletAdapterNetwork } from '@solana/wallet-adapter-base';
+import { Connection, LAMPORTS_PER_SOL, PublicKey, SystemProgram, Transaction, TransactionInstruction, VersionedTransaction } from '@solana/web3.js';
 import { usePage, router, Link } from '@inertiajs/react';
 import { QRCodeSVG } from 'qrcode.react';
 
 import '@solana/wallet-adapter-react-ui/styles.css';
 
-const DEPOSIT_VAULT_ADDRESS = '8F6FkGNAwbdB3DveHnhjuozu5byyX8aBjUX73x9ncE5A';
+const USER_VAULT_PROGRAM_ID = new PublicKey('5fFzormXushFBX8s5fkUo49AN4G6ZxjJCqH1KSr6o9mb');
+const USER_VAULT_SEED = new TextEncoder().encode('user-vault');
+const INITIALIZE_VAULT_DISCRIMINATOR = Uint8Array.from([48, 191, 163, 44, 71, 129, 63, 164]);
+const DEPOSIT_VAULT_DISCRIMINATOR = Uint8Array.from([242, 35, 198, 137, 82, 225, 242, 182]);
+
+const encodeU64 = (value) => {
+    const bytes = new Uint8Array(8);
+    let remaining = BigInt(value);
+    for (let index = 0; index < bytes.length; index += 1) {
+        bytes[index] = Number(remaining & 0xffn);
+        remaining >>= 8n;
+    }
+    return bytes;
+};
+
+const concatBytes = (...parts) => {
+    const length = parts.reduce((total, part) => total + part.length, 0);
+    const result = new Uint8Array(length);
+    let offset = 0;
+    parts.forEach((part) => {
+        result.set(part, offset);
+        offset += part.length;
+    });
+    return result;
+};
 const FROM_TOKEN_GROUPS = [
     { label: 'Top', tokens: ['SOL', 'USDC', 'USDT'] },
     { label: 'Yield', tokens: ['stORE'] },
@@ -217,6 +242,7 @@ function CustomWalletButton() {
 function UtilifyApp() {
     const { publicKey, wallet, sendTransaction } = useWallet();
     const { connection } = useConnection();
+    const vaultConnection = useMemo(() => new Connection('https://api.devnet.solana.com', 'confirmed'), []);
     const { setVisible } = useWalletModal();
     const { auth } = usePage().props;
 
@@ -371,6 +397,10 @@ function UtilifyApp() {
             setVisible(true);
             return;
         }
+        if (connection.rpcEndpoint.includes('devnet')) {
+            setTransactionNotice({ type: 'error', title: 'Swap unavailable on Devnet', message: 'Switch to Solana Mainnet to use Jupiter swap. Your PDA top up is currently running on Devnet.' });
+            return;
+        }
         if (!Number.isFinite(amount) || amount <= 0) {
             setTransactionNotice({ type: 'error', title: 'Invalid swap amount', message: 'Masukkan jumlah swap yang lebih besar dari 0.' });
             return;
@@ -383,6 +413,26 @@ function UtilifyApp() {
         setIsLoading(true);
         setSwapStatus('Mengambil quote Jupiter...');
         try {
+            let availableAmount = 0;
+            if (payToken === 'SOL') {
+                availableAmount = Number.parseFloat(balance || '0');
+                if (amount + 0.001 > availableAmount) {
+                    setActiveTab('deposit');
+                    throw new Error('Insufficient SOL balance. Please top up your wallet before swapping.');
+                }
+            } else {
+                const tokenAccounts = await connection.getParsedTokenAccountsByOwner(publicKey, {
+                    mint: new PublicKey(TOKEN_MINTS[payToken]),
+                });
+                availableAmount = tokenAccounts.value.reduce((total, account) => (
+                    total + (account.account.data.parsed.info.tokenAmount.uiAmount || 0)
+                ), 0);
+                if (amount > availableAmount) {
+                    setActiveTab('deposit');
+                    throw new Error(`Insufficient ${payToken} balance. Please top up your wallet before swapping.`);
+                }
+            }
+
             const rawAmount = Math.round(amount * (10 ** TOKEN_DECIMALS[payToken]));
             const quoteResponse = await fetch('/api/swap/quote', {
                 method: 'POST',
@@ -434,7 +484,12 @@ function UtilifyApp() {
             setTransactionNotice({ type: 'success', title: 'Swap berhasil', message: `${amount} ${payToken} berhasil ditukar menjadi ${quotedReceiveAmount} ${receiveToken}.`, signature });
         } catch (error) {
             console.error('Swap Error:', error);
-            setTransactionNotice({ type: 'error', title: 'Swap Failed', message: error.message || 'Transaksi dibatalkan.' });
+            const message = error.message || 'The transaction was cancelled.';
+            setTransactionNotice({
+                type: 'error',
+                title: message.startsWith('Insufficient') ? 'Insufficient Balance' : 'Swap Failed',
+                message,
+            });
         } finally {
             setIsLoading(false);
             setSwapStatus('');
@@ -458,25 +513,42 @@ function UtilifyApp() {
 
         setIsLoading(true);
         try {
-            const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('finalized');
-            const transaction = new Transaction({
-                feePayer: publicKey,
-                recentBlockhash: blockhash,
-            }).add(
-                SystemProgram.transfer({
-                    fromPubkey: publicKey,
-                    toPubkey: new PublicKey(DEPOSIT_VAULT_ADDRESS),
-                    lamports: Math.round(amount * LAMPORTS_PER_SOL),
-                })
+            const { blockhash, lastValidBlockHeight } = await vaultConnection.getLatestBlockhash('finalized');
+            const [userVault] = PublicKey.findProgramAddressSync(
+                [USER_VAULT_SEED, publicKey.toBytes()],
+                USER_VAULT_PROGRAM_ID
             );
+            const accountInfo = await vaultConnection.getAccountInfo(userVault);
+            const accountKeys = [
+                { pubkey: publicKey, isSigner: true, isWritable: true },
+                { pubkey: userVault, isSigner: false, isWritable: true },
+                { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+            ];
+            const instructions = [];
 
-            const signature = await sendTransaction(transaction, connection);
-            await connection.confirmTransaction({
+            if (!accountInfo) {
+                instructions.push(new TransactionInstruction({
+                    programId: USER_VAULT_PROGRAM_ID,
+                    keys: accountKeys,
+                    data: INITIALIZE_VAULT_DISCRIMINATOR,
+                }));
+            }
+
+            instructions.push(new TransactionInstruction({
+                programId: USER_VAULT_PROGRAM_ID,
+                keys: accountKeys,
+                data: concatBytes(DEPOSIT_VAULT_DISCRIMINATOR, encodeU64(Math.round(amount * LAMPORTS_PER_SOL))),
+            }));
+
+            const transaction = new Transaction({ feePayer: publicKey, recentBlockhash: blockhash }).add(...instructions);
+
+            const signature = await sendTransaction(transaction, vaultConnection);
+            await vaultConnection.confirmTransaction({
                 signature,
                 blockhash,
                 lastValidBlockHeight,
             }, 'processed');
-            setBalance((await connection.getBalance(publicKey) / LAMPORTS_PER_SOL).toFixed(4));
+            setBalance((await vaultConnection.getBalance(publicKey) / LAMPORTS_PER_SOL).toFixed(4));
             setDepositAmount('');
             setTransactionNotice({ type: 'success', title: 'Top Up Successful', message: `${amount} SOL was sent to the private pool vault.`, signature });
         } catch (error) {
@@ -862,11 +934,8 @@ function UtilifyApp() {
 
 // --- WRAPPER UTAMA ---
 export default function Welcome() {
-    const endpoint = useMemo(
-        () => import.meta.env.VITE_SOLANA_RPC_URL || 'https://solana-rpc.publicnode.com',
-        []
-    );
-    const wallets = useMemo(() => [new SolflareWalletAdapter()], []);
+    const endpoint = useMemo(() => import.meta.env.VITE_SOLANA_RPC_URL || 'https://api.devnet.solana.com', []);
+    const wallets = useMemo(() => [new SolflareWalletAdapter({ network: WalletAdapterNetwork.Devnet })], []);
 
     return (
         <ConnectionProvider endpoint={endpoint}>
