@@ -18,8 +18,9 @@ const TOKEN_MINTS = {
     SOL: 'So11111111111111111111111111111111111111112',
     USDC: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
     USDT: 'Es9vMFrzaCERmJfrF4H2FYD4uF1qjQ7wN1YfH6mJg4T',
+    stORE: 'sTorERYB6xAZ1SSbwpK3zoK2EEwbBrc7TZAzg1uCGiH',
 };
-const TOKEN_DECIMALS = { SOL: 9, USDC: 6, USDT: 6 };
+const TOKEN_DECIMALS = { SOL: 9, USDC: 6, USDT: 6, stORE: 11 };
 const TOKEN_PRICE_IDS = {
     SOL: 'solana',
     USDC: 'usd-coin',
@@ -115,6 +116,43 @@ function TokenSelect({ value, groups, onChange }) {
     );
 }
 
+function TransactionNotice({ notice, onClose }) {
+    if (!notice) return null;
+
+    const isSuccess = notice.type === 'success';
+
+    return (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 px-5 backdrop-blur-sm" onClick={onClose}>
+            <div className="w-full max-w-sm overflow-hidden rounded-2xl border border-white/10 bg-[#18181B] shadow-2xl" onClick={(event) => event.stopPropagation()}>
+                <div className={`h-1.5 ${isSuccess ? 'bg-emerald-400' : 'bg-rose-400'}`} />
+                <div className="p-6">
+                    <div className="flex items-start gap-4">
+                        <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full ${isSuccess ? 'bg-emerald-400/15 text-emerald-300' : 'bg-rose-400/15 text-rose-300'}`}>
+                            <span className="material-symbols-outlined text-[28px]">{isSuccess ? 'check_circle' : 'error'}</span>
+                        </div>
+                        <div className="min-w-0">
+                            <p className={`text-[10px] font-mono uppercase tracking-[0.2em] ${isSuccess ? 'text-emerald-300' : 'text-rose-300'}`}>
+                                {isSuccess ? 'Transaction complete' : 'Transaction failed'}
+                            </p>
+                            <h2 className="mt-1 text-xl font-semibold text-[#e5e1e4]">{notice.title}</h2>
+                        </div>
+                    </div>
+                    <p className="mt-5 text-sm leading-6 text-[#c7c4d8]">{notice.message}</p>
+                    {notice.signature && (
+                        <div className="mt-4 rounded-lg border border-white/10 bg-[#09090B] p-3">
+                            <p className="text-[10px] font-mono uppercase tracking-[0.16em] text-[#8f8d99]">Signature</p>
+                            <p className="mt-1 break-all text-xs font-mono text-[#c3c0ff]">{notice.signature}</p>
+                        </div>
+                    )}
+                    <button onClick={onClose} className={`mt-6 w-full rounded-lg py-3 text-xs font-mono font-bold text-white transition-colors cursor-pointer ${isSuccess ? 'bg-emerald-500 hover:bg-emerald-400' : 'bg-rose-500 hover:bg-rose-400'}`}>
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 // --- HELPER UNTUK CSRF TOKEN LARAVEL ---
 const getCsrfToken = () => {
     return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
@@ -195,6 +233,7 @@ function UtilifyApp() {
     const [swapStatus, setSwapStatus] = useState('');
     const [tokenPrices, setTokenPrices] = useState({});
     const [isRateLoading, setIsRateLoading] = useState(false);
+    const [transactionNotice, setTransactionNotice] = useState(null);
 
     // State wallet balance & deposit form
     const [depositAmount, setDepositAmount] = useState('');
@@ -215,27 +254,45 @@ function UtilifyApp() {
     const quotedReceiveAmount = swapRate && Number.parseFloat(payAmount) > 0
         ? (Number.parseFloat(payAmount) * swapRate * 0.997).toFixed(6)
         : '--';
+    const isStorePair = payToken === 'stORE' || receiveToken === 'stORE';
 
     useEffect(() => {
         const tokenIds = [...new Set([payToken, receiveToken].map((token) => TOKEN_PRICE_IDS[token]).filter(Boolean))];
-        if (tokenIds.length === 0) {
+        const needsStorePrice = [payToken, receiveToken].includes('stORE');
+        if (tokenIds.length === 0 && !needsStorePrice) {
             setTokenPrices({});
             return;
         }
 
         let isMounted = true;
         setIsRateLoading(true);
-        fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${tokenIds.join(',')}&vs_currencies=usd`)
-            .then((response) => {
-                if (!response.ok) throw new Error('Price request failed');
-                return response.json();
-            })
-            .then((prices) => {
+        const priceRequests = [];
+        if (tokenIds.length > 0) {
+            priceRequests.push(
+                fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${tokenIds.join(',')}&vs_currencies=usd`)
+                    .then((response) => response.ok ? response.json() : {})
+            );
+        } else {
+            priceRequests.push(Promise.resolve({}));
+        }
+        if (needsStorePrice) {
+            priceRequests.push(
+                fetch('https://api.jup.ag/tokens/v2/search?query=stORE')
+                    .then((response) => response.ok ? response.json() : [])
+                    .then((tokens) => {
+                        const storeToken = tokens.find((token) => token.id === TOKEN_MINTS.stORE || token.symbol === 'stORE');
+                        return storeToken?.usdPrice ? { stORE: storeToken.usdPrice } : {};
+                    })
+            );
+        }
+        Promise.all(priceRequests)
+            .then(([prices, storePrices = {}]) => {
                 if (!isMounted) return;
                 const normalizedPrices = Object.entries(TOKEN_PRICE_IDS).reduce((result, [token, id]) => {
                     if (prices[id]?.usd) result[token] = prices[id].usd;
                     return result;
                 }, {});
+                Object.assign(normalizedPrices, storePrices);
                 setTokenPrices(normalizedPrices);
             })
             .catch(() => {
@@ -315,11 +372,11 @@ function UtilifyApp() {
             return;
         }
         if (!Number.isFinite(amount) || amount <= 0) {
-            alert('Masukkan jumlah swap yang valid.');
+            setTransactionNotice({ type: 'error', title: 'Invalid swap amount', message: 'Masukkan jumlah swap yang lebih besar dari 0.' });
             return;
         }
         if (!TOKEN_MINTS[payToken] || !TOKEN_MINTS[receiveToken]) {
-            alert('Token ini belum memiliki alamat mint Solana yang terkonfigurasi.');
+            setTransactionNotice({ type: 'error', title: 'Token belum tersedia', message: 'Token ini belum memiliki mint address Solana yang terkonfigurasi.' });
             return;
         }
 
@@ -374,10 +431,10 @@ function UtilifyApp() {
             setSwapStatus('Mengonfirmasi transaksi di blockchain...');
             await connection.confirmTransaction(signature, 'confirmed');
             setBalance((await connection.getBalance(publicKey) / LAMPORTS_PER_SOL).toFixed(4));
-            alert(`Swap berhasil! Signature: ${signature.slice(0, 8)}...`);
+            setTransactionNotice({ type: 'success', title: 'Swap berhasil', message: `${amount} ${payToken} berhasil ditukar menjadi ${quotedReceiveAmount} ${receiveToken}.`, signature });
         } catch (error) {
             console.error('Swap Error:', error);
-            alert(`Swap gagal: ${error.message || 'Transaksi dibatalkan.'}`);
+            setTransactionNotice({ type: 'error', title: 'Swap Failed', message: error.message || 'Transaksi dibatalkan.' });
         } finally {
             setIsLoading(false);
             setSwapStatus('');
@@ -388,7 +445,7 @@ function UtilifyApp() {
     const handleDeposit = async () => {
         const amount = parseFloat(depositAmount);
         if (!depositAmount || isNaN(amount) || amount <= 0) {
-            alert('Masukkan jumlah deposit yang valid!');
+            setTransactionNotice({ type: 'error', title: 'Invalid Top Up Amount', message: 'Please enter a top up amount greater than 0.' });
             return;
         }
 
@@ -421,18 +478,10 @@ function UtilifyApp() {
             }, 'processed');
             setBalance((await connection.getBalance(publicKey) / LAMPORTS_PER_SOL).toFixed(4));
             setDepositAmount('');
-            alert(`Top Up Berhasil! Signature: ${signature.slice(0, 8)}...`);
+            setTransactionNotice({ type: 'success', title: 'Top Up Successful', message: `${amount} SOL was sent to the private pool vault.`, signature });
         } catch (error) {
             console.error('Error deposit:', error);
-            const errorMessage = error?.message || '';
-            const readableError = /insufficient|insufficient funds|debit an account|not enough/i.test(errorMessage)
-                    ? 'Saldo SOL tidak cukup untuk nominal top up dan biaya transaksi.'
-                    : /internal error/i.test(errorMessage) && Number.parseFloat(balance || '0') <= 0
-                        ? 'Saldo SOL wallet 0. Solflare tidak dapat memproses transaksi tanpa SOL untuk biaya network.'
-                        : /internal error/i.test(errorMessage) && publicKey?.toBase58() === DEPOSIT_VAULT_ADDRESS
-                            ? 'Alamat vault sama dengan wallet pengirim. Gunakan wallet vault terpisah untuk top up pool.'
-                    : errorMessage || 'Terjadi kesalahan yang tidak diketahui.';
-            alert(`Top Up gagal: ${readableError}`);
+            setTransactionNotice({ type: 'error', title: 'Top Up Failed', message: 'Please have at least, 0.01 SOL in your wallet' });
         } finally {
             setIsLoading(false);
         }
@@ -445,7 +494,7 @@ function UtilifyApp() {
             return;
         }
         if (!Number.isFinite(amount) || amount <= 0) {
-            alert('Masukkan jumlah deposit yang valid.');
+            setTransactionNotice({ type: 'error', title: 'Invalid Top Up Amount', message: 'Please enter a top up amount greater than 0.' });
             return;
         }
         setIsDepositConfirmOpen(true);
@@ -609,11 +658,10 @@ function UtilifyApp() {
                                         </div>
                                         <div className="flex justify-between items-center gap-4">
                                             <input
-                                                type="number"
-                                                min="0"
-                                                step="any"
+                                                type="text"
                                                 value={quotedReceiveAmount}
                                                 readOnly
+                                                aria-label="Estimated receive amount"
                                                 className="bg-transparent text-3xl font-semibold text-[#e5e1e4] outline-none min-w-0 w-full cursor-default"
                                             />
                                             <TokenSelect value={receiveToken} groups={availableToGroups} onChange={setReceiveToken} />
@@ -623,11 +671,11 @@ function UtilifyApp() {
                                 <div className="flex justify-between mt-4 text-[11px] text-[#8f8d99] font-mono">
                                     <span>Rate</span>
                                     <span>
-                                        {isRateLoading ? 'Loading live rate...' : swapRate ? `1 ${payToken} ≈ ${(swapRate * 0.997).toFixed(6)} ${receiveToken}` : 'Rate unavailable'}
+                                        {isRateLoading ? 'Loading live rate...' : swapRate ? `1 ${payToken} ≈ ${(swapRate * 0.997).toFixed(6)} ${receiveToken}` : isStorePair ? 'stORE rate not configured' : 'Rate unavailable'}
                                     </span>
                                 </div>
                                 <div className="flex justify-end text-[11px] text-[#8f8d99] font-mono">
-                                    <span>{swapRate ? `1 ${receiveToken} ≈ ${(1 / swapRate).toFixed(6)} ${payToken}` : 'Select a supported pair'}</span>
+                                    <span>{swapRate ? `1 ${receiveToken} ≈ ${(1 / swapRate).toFixed(6)} ${payToken}` : isStorePair ? 'Requires stORE market price' : 'Select a supported pair'}</span>
                                 </div>
                                 {swapStatus && (
                                     <div className="mt-3 rounded-lg border border-[#c3c0ff]/20 bg-[#4f46e5]/10 p-3 text-xs text-[#c3c0ff] font-mono animate-pulse">
@@ -688,6 +736,8 @@ function UtilifyApp() {
                     </div>
                 </section>
             </main>
+
+            <TransactionNotice notice={transactionNotice} onClose={() => setTransactionNotice(null)} />
 
             {isDepositConfirmOpen && publicKey && (
                 <div
