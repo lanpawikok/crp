@@ -33,6 +33,78 @@ const TOKEN_PRICE_IDS = {
     ZEC: 'zcash',
 };
 
+const TOKEN_LOGOS = {
+    SOL: 'https://cdn.jsdelivr.net/gh/solana-labs/token-list@main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png',
+    USDC: 'https://cdn.jsdelivr.net/gh/solana-labs/token-list@main/assets/mainnet/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v/logo.png',
+    USDT: 'https://cdn.jsdelivr.net/gh/solana-labs/token-list@main/assets/mainnet/Es9vMFrzaCERmJfrF4H2FYD4uF1qjQ7wN1YfH6mJg4T/logo.png',
+};
+const TOKEN_COLORS = {
+    SOL: 'bg-[#8b8bff] text-[#17172a]',
+    USDC: 'bg-[#2775ca] text-white',
+    USDT: 'bg-[#26a17b] text-white',
+    stORE: 'bg-[#e6b85c] text-[#241b08]',
+    ORE: 'bg-[#d27b42] text-[#24140b]',
+    ZEC: 'bg-[#f4b728] text-[#2a1b00]',
+};
+
+function TokenLogo({ token, size = 'h-7 w-7' }) {
+    return (
+        <span className={`${size} ${TOKEN_COLORS[token] || 'bg-[#39393b] text-white'} relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full text-[10px] font-bold font-mono`}>
+            {TOKEN_LOGOS[token] && (
+                <img
+                    src={TOKEN_LOGOS[token]}
+                    alt=""
+                    className="absolute inset-0 h-full w-full object-cover"
+                    onError={(event) => { event.currentTarget.style.display = 'none'; }}
+                />
+            )}
+            <span>{token.slice(0, 2)}</span>
+        </span>
+    );
+}
+
+function TokenSelect({ value, groups, onChange }) {
+    const [isOpen, setIsOpen] = useState(false);
+
+    return (
+        <div className="relative">
+            <button
+                type="button"
+                onClick={() => setIsOpen((open) => !open)}
+                className="flex items-center gap-2 rounded-full border border-[#4f46e5]/30 bg-[#4f46e5]/20 px-3 py-1.5 text-xs font-mono text-[#c3c0ff] transition-colors hover:bg-[#4f46e5]/30 cursor-pointer"
+                aria-haspopup="listbox"
+                aria-expanded={isOpen}
+            >
+                <TokenLogo token={value} size="h-6 w-6" />
+                <span>{value}</span>
+                <span className="material-symbols-outlined text-[16px]">expand_more</span>
+            </button>
+            {isOpen && (
+                <div className="absolute right-0 top-full z-30 mt-2 w-48 overflow-hidden rounded-xl border border-white/10 bg-[#201f22] p-1.5 shadow-2xl" role="listbox">
+                    {groups.map((group) => (
+                        <div key={group.label}>
+                            <p className="px-2 pb-1 pt-2 text-[10px] uppercase tracking-[0.16em] text-[#8f8d99]">{group.label}</p>
+                            {group.tokens.map((token) => (
+                                <button
+                                    key={token}
+                                    type="button"
+                                    onClick={() => { onChange(token); setIsOpen(false); }}
+                                    className={`flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-xs font-mono transition-colors cursor-pointer ${value === token ? 'bg-[#4f46e5]/30 text-[#c3c0ff]' : 'text-[#e5e1e4] hover:bg-white/10'}`}
+                                    role="option"
+                                    aria-selected={value === token}
+                                >
+                                    <TokenLogo token={token} />
+                                    <span>{token}</span>
+                                </button>
+                            ))}
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
+
 // --- HELPER UNTUK CSRF TOKEN LARAVEL ---
 const getCsrfToken = () => {
     return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
@@ -229,12 +301,6 @@ function UtilifyApp() {
         setPayAmount(receiveAmount);
         setReceiveAmount(payAmount);
     };
-
-    const renderTokenOptions = (groups) => groups.map((group) => (
-        <optgroup key={group.label} label={group.label}>
-            {group.tokens.map((token) => <option key={token} value={token}>{token}</option>)}
-        </optgroup>
-    ));
 
     const handleMaxPayAmount = () => {
         if (payToken === 'SOL' && balance !== null) {
@@ -506,7 +572,7 @@ function UtilifyApp() {
                     </div>
 
                     {/* Terminal Card Dynamic Area */}
-                    <div className="bg-[#18181B]/60 backdrop-blur-md border border-white/10 rounded-xl p-6 relative overflow-hidden group shadow-lg min-h-[400px]">
+                    <div className="bg-[#18181B]/60 backdrop-blur-md border border-white/10 rounded-xl p-6 relative overflow-visible group shadow-lg min-h-[400px]">
                         <div className="flex justify-between items-center mb-4 border-b border-white/5 pb-4">
                             <h2 className="text-2xl font-semibold text-[#e5e1e4] capitalize">{activeTab}</h2>
                             <span className="text-xs text-gray-400 font-mono bg-[#201f22] px-2 py-1 rounded">Private Mode</span>
@@ -547,13 +613,7 @@ function UtilifyApp() {
                                             />
                                             <div className="flex items-center gap-2 shrink-0">
                                                 <button type="button" onClick={handleMaxPayAmount} className="text-[10px] font-mono text-[#c3c0ff] hover:text-white cursor-pointer">MAX</button>
-                                                <select
-                                                    value={payToken}
-                                                    onChange={(e) => setPayToken(e.target.value)}
-                                                    className="bg-[#201f22] text-[#e5e1e4] px-3 py-2 rounded-full border border-white/10 text-xs font-mono outline-none cursor-pointer"
-                                                >
-                                                    {renderTokenOptions(FROM_TOKEN_GROUPS)}
-                                                </select>
+                                                <TokenSelect value={payToken} groups={FROM_TOKEN_GROUPS} onChange={setPayToken} />
                                             </div>
                                         </div>
                                     </div>
@@ -578,13 +638,7 @@ function UtilifyApp() {
                                                 readOnly
                                                 className="bg-transparent text-3xl font-semibold text-[#e5e1e4] outline-none min-w-0 w-full cursor-default"
                                             />
-                                            <select
-                                                value={receiveToken}
-                                                onChange={(e) => setReceiveToken(e.target.value)}
-                                                className="bg-[#4f46e5]/20 text-[#c3c0ff] px-3 py-2 rounded-full border border-[#4f46e5]/30 text-xs font-mono outline-none cursor-pointer"
-                                            >
-                                                {renderTokenOptions(TO_TOKEN_GROUPS)}
-                                            </select>
+                                            <TokenSelect value={receiveToken} groups={TO_TOKEN_GROUPS} onChange={setReceiveToken} />
                                         </div>
                                     </div>
                                 </div>
