@@ -1,5 +1,4 @@
 import { Link, Head, useForm } from '@inertiajs/react';
-import { route } from 'ziggy-js';
 
 export default function Login({ status }) {
     const { data, setData, post, processing, errors } = useForm({
@@ -11,7 +10,7 @@ export default function Login({ status }) {
     const submit = (e) => {
         e.preventDefault();
 
-        post(route('login'));
+        post('/login');  // ← FIX: Ganti route('login') dengan '/login'
     };
 
     return (
@@ -30,7 +29,7 @@ export default function Login({ status }) {
                             </span>
 
                             <span className="text-xl font-bold tracking-tight text-[#c3c0ff]">
-                                Utilify
+                                No Trace
                             </span>
                         </div>
 
@@ -82,7 +81,6 @@ export default function Login({ status }) {
 
                         {/* Wallet Buttons */}
                         <div className="space-y-3 mb-6">
-
 
                             <button
                                 type="button"
@@ -202,14 +200,15 @@ export default function Login({ status }) {
                                     ? 'Logging in...'
                                     : 'Continue with Email'}
                             </button>
+                            
                             <div className="text-center mt-2">
 
                                 <p className="text-sm text-gray-400">
 
-                                    Didn't have an account  ?{' '}
+                                    Didn't have an account?{' '}
 
                                     <Link
-                                        href="register"
+                                        href="/register"  // ← FIX: Ganti "register" dengan "/register"
                                         className="text-indigo-300 hover:text-indigo-200 font-bold transition"
                                     >
                                         Register Here
@@ -219,7 +218,6 @@ export default function Login({ status }) {
 
                             </div>
 
-
                         </form>
 
                     </div>
@@ -228,7 +226,7 @@ export default function Login({ status }) {
 
                 {/* Footer */}
                 <footer className="border-t border-white/10 py-6 text-center text-sm text-gray-500 relative z-10">
-                    © 2026 Utilify Web3 Hub
+                    © 2026 No Trace Web3 Hub
                 </footer>
 
             </div>

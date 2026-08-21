@@ -1,6 +1,4 @@
 import { Head, Link, useForm } from '@inertiajs/react';
-import { route } from 'ziggy-js';
-
 
 export default function Register() {
     const { data, setData, post, processing, errors, reset } = useForm({
@@ -14,7 +12,7 @@ export default function Register() {
     const submit = (e) => {
         e.preventDefault();
 
-        post(route('register'), {
+        post('/register', {
             onFinish: () => reset('password', 'password_confirmation'),
         });
     };
@@ -55,7 +53,7 @@ export default function Register() {
                             <div className="text-center flex flex-col gap-2">
 
                                 <h1 className="text-3xl md:text-4xl font-bold">
-                                    Join Utilify
+                                    Join No Trace
                                 </h1>
 
                                 <p className="text-sm text-gray-400">
@@ -117,7 +115,7 @@ export default function Register() {
                                         onChange={(e) =>
                                             setData('email', e.target.value)
                                         }
-                                        placeholder="pilot@utilify.xyz"
+                                        placeholder="pilot@notrace.xyz"
                                         required
                                         autoComplete="username"
                                         className="bg-[#09090B] border border-white/10 text-white rounded-lg px-4 py-3 focus:border-indigo-300 focus:outline-none focus:ring-1 focus:ring-indigo-300 transition"
@@ -286,7 +284,7 @@ export default function Register() {
                                     Already initialized?{' '}
 
                                     <Link
-                                        href="login"
+                                        href="/login"
                                         className="text-indigo-300 hover:text-indigo-200 font-bold transition"
                                     >
                                         Log In here
@@ -308,7 +306,7 @@ export default function Register() {
                     <div className="flex flex-col md:flex-row justify-between items-center px-5 md:px-10 max-w-7xl mx-auto gap-4">
 
                         <div className="text-lg font-semibold">
-                            Utilify
+                            No Trace
                         </div>
 
                         <div className="flex gap-6 text-xs">
@@ -344,7 +342,7 @@ export default function Register() {
                         </div>
 
                         <div className="text-xs text-gray-500">
-                            © 2026 Utilify Web3 Hub
+                            © 2026 No Trace Web3 Hub
                         </div>
 
                     </div>

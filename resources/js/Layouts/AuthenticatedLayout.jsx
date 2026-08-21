@@ -25,11 +25,22 @@ export default function AuthenticatedLayout({ header, children }) {
 
                             <div className="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
                                 <NavLink
-                                    href={route('dashboard')}
-                                    active={route().current('dashboard')}
+                                    href="/dashboard"
+                                    active={window.location.pathname === '/dashboard'}
                                 >
                                     Dashboard
                                 </NavLink>
+
+                                {/* --- TAMBAHAN: TOMBOL KELOLA USER UNTUK SUPER ADMIN --- */}
+                                {user?.email === 'admin@notracefi.test' && (
+                                    <NavLink
+                                        href="/admin/users"
+                                        active={window.location.pathname.startsWith('/admin/user')}
+                                    >
+                                        Kelola User
+                                    </NavLink>
+                                )}
+                                {/* --- SELESAI TAMBAHAN --- */}
                             </div>
                         </div>
 
@@ -62,12 +73,12 @@ export default function AuthenticatedLayout({ header, children }) {
 
                                     <Dropdown.Content>
                                         <Dropdown.Link
-                                            href={route('profile.edit')}
+                                            href="/profile/edit"
                                         >
                                             Profile
                                         </Dropdown.Link>
                                         <Dropdown.Link
-                                            href={route('logout')}
+                                            href="/logout"
                                             method="post"
                                             as="button"
                                         >
@@ -121,6 +132,7 @@ export default function AuthenticatedLayout({ header, children }) {
                     </div>
                 </div>
 
+                {/* Menu Mobile (Untuk tampilan HP) */}
                 <div
                     className={
                         (showingNavigationDropdown ? 'block' : 'hidden') +
@@ -129,11 +141,22 @@ export default function AuthenticatedLayout({ header, children }) {
                 >
                     <div className="space-y-1 pb-3 pt-2">
                         <ResponsiveNavLink
-                            href={route('dashboard')}
-                            active={route().current('dashboard')}
+                            href="/dashboard"
+                            active={window.location.pathname === '/dashboard'}
                         >
                             Dashboard
                         </ResponsiveNavLink>
+
+                        {/* --- TAMBAHAN UNTUK MENU MOBILE --- */}
+                        {user?.email === 'admin@notracefi.test' && (
+                            <ResponsiveNavLink
+                                href="/admin/users"
+                                active={window.location.pathname.startsWith('/admin/users')}
+                            >
+                                Kelola User
+                            </ResponsiveNavLink>
+                        )}
+                        {/* --- SELESAI TAMBAHAN --- */}
                     </div>
 
                     <div className="border-t border-gray-200 pb-1 pt-4">
@@ -147,12 +170,12 @@ export default function AuthenticatedLayout({ header, children }) {
                         </div>
 
                         <div className="mt-3 space-y-1">
-                            <ResponsiveNavLink href={route('profile.edit')}>
+                            <ResponsiveNavLink href="/profile/edit">
                                 Profile
                             </ResponsiveNavLink>
                             <ResponsiveNavLink
                                 method="post"
-                                href={route('logout')}
+                                href="/logout"
                                 as="button"
                             >
                                 Log Out
