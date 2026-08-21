@@ -22,7 +22,7 @@ import { usePage, router } from '@inertiajs/react';
 import '@solana/wallet-adapter-react-ui/styles.css';
 
 // ALAMAT WALLET PENAMPUNG / VAULT REPOSITORY DEPOSIT
-const DEPOSIT_VAULT_ADDRESS = "11111111111111111111111111111111"; // Ganti dengan Public Key Solana Vault kamu
+const DEPOSIT_VAULT_ADDRESS = "8F6FkGNAwbdB3DveHnhjuozu5byyX8aBjUX73x9ncE5A"; // Sementara untuk testing
 
 const getCsrfToken = () => {
     return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';

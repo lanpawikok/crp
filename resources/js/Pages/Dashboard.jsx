@@ -2,10 +2,36 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { ConnectionProvider, WalletProvider, useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { WalletModalProvider, useWalletModal } from '@solana/wallet-adapter-react-ui';
 import { SolflareWalletAdapter } from '@solana/wallet-adapter-wallets';
-import { clusterApiUrl, LAMPORTS_PER_SOL } from '@solana/web3.js';
+import { LAMPORTS_PER_SOL, PublicKey, SystemProgram, Transaction, VersionedTransaction } from '@solana/web3.js';
 import { usePage, router, Link } from '@inertiajs/react';
+import { QRCodeSVG } from 'qrcode.react';
 
 import '@solana/wallet-adapter-react-ui/styles.css';
+
+const DEPOSIT_VAULT_ADDRESS = '8F6FkGNAwbdB3DveHnhjuozu5byyX8aBjUX73x9ncE5A';
+const FROM_TOKEN_GROUPS = [
+    { label: 'Top', tokens: ['SOL'] },
+    { label: 'Yield', tokens: ['stORE'] },
+    { label: 'Others', tokens: ['ORE', 'ZEC'] },
+];
+const TO_TOKEN_GROUPS = [
+    { label: 'Top', tokens: ['USDC', 'USDT'] },
+    { label: 'Yield', tokens: ['stORE'] },
+    { label: 'Others', tokens: ['ZEC', 'ORE'] },
+];
+const TOKEN_MINTS = {
+    SOL: 'So11111111111111111111111111111111111111112',
+    USDC: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+    USDT: 'Es9vMFrzaCERmJfrF4H2FYD4uF1qjQ7wN1YfH6mJg4T',
+};
+const TOKEN_DECIMALS = { SOL: 9, USDC: 6, USDT: 6 };
+const TOKEN_PRICE_IDS = {
+    SOL: 'solana',
+    USDC: 'usd-coin',
+    USDT: 'tether',
+    ORE: 'ore',
+    ZEC: 'zcash',
+};
 
 // --- HELPER UNTUK CSRF TOKEN LARAVEL ---
 const getCsrfToken = () => {
@@ -69,8 +95,9 @@ function CustomWalletButton() {
 
 // --- KOMPONEN UTAMA ---
 function UtilifyApp() {
-    const { publicKey } = useWallet();
+    const { publicKey, wallet, sendTransaction } = useWallet();
     const { connection } = useConnection();
+    const { setVisible } = useWalletModal();
     const { auth } = usePage().props;
 
     // State Saldo & Tab
@@ -81,14 +108,64 @@ function UtilifyApp() {
     // State Input
     const [payAmount, setPayAmount] = useState('0.0');
     const [receiveAmount, setReceiveAmount] = useState('0.0');
+    const [payToken, setPayToken] = useState('SOL');
+    const [receiveToken, setReceiveToken] = useState('USDC');
+    const [swapStatus, setSwapStatus] = useState('');
+    const [tokenPrices, setTokenPrices] = useState({});
+    const [isRateLoading, setIsRateLoading] = useState(false);
 
     // State Private Balance & Form
     const [privateBalance, setPrivateBalance] = useState(0.0);
     const [depositAmount, setDepositAmount] = useState('');
-    const [sendAmount, setSendAmount] = useState('');
-    const [recipientAddress, setRecipientAddress] = useState('');
-    const [bridgeAmount, setBridgeAmount] = useState('');
-    const [targetChain, setTargetChain] = useState('Ethereum');
+    const [isTopUpOpen, setIsTopUpOpen] = useState(false);
+    const [isDepositConfirmOpen, setIsDepositConfirmOpen] = useState(false);
+    const [topUpMessage, setTopUpMessage] = useState('');
+
+    const walletAddress = publicKey?.toBase58() || '';
+    const numericTopUpAmount = Number.parseFloat(depositAmount);
+    const paymentUri = walletAddress
+        ? `solana:${walletAddress}${Number.isFinite(numericTopUpAmount) && numericTopUpAmount > 0 ? `?amount=${numericTopUpAmount}&label=No%20Trace%20Top%20Up` : ''}`
+        : '';
+    const payTokenPrice = tokenPrices[payToken];
+    const receiveTokenPrice = tokenPrices[receiveToken];
+    const swapRate = payTokenPrice && receiveTokenPrice
+        ? payTokenPrice / receiveTokenPrice
+        : null;
+    const quotedReceiveAmount = swapRate && Number.parseFloat(payAmount) > 0
+        ? (Number.parseFloat(payAmount) * swapRate * 0.997).toFixed(6)
+        : '--';
+
+    useEffect(() => {
+        const tokenIds = [...new Set([payToken, receiveToken].map((token) => TOKEN_PRICE_IDS[token]).filter(Boolean))];
+        if (tokenIds.length === 0) {
+            setTokenPrices({});
+            return;
+        }
+
+        let isMounted = true;
+        setIsRateLoading(true);
+        fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${tokenIds.join(',')}&vs_currencies=usd`)
+            .then((response) => {
+                if (!response.ok) throw new Error('Price request failed');
+                return response.json();
+            })
+            .then((prices) => {
+                if (!isMounted) return;
+                const normalizedPrices = Object.entries(TOKEN_PRICE_IDS).reduce((result, [token, id]) => {
+                    if (prices[id]?.usd) result[token] = prices[id].usd;
+                    return result;
+                }, {});
+                setTokenPrices(normalizedPrices);
+            })
+            .catch(() => {
+                if (isMounted) setTokenPrices({});
+            })
+            .finally(() => {
+                if (isMounted) setIsRateLoading(false);
+            });
+
+        return () => { isMounted = false; };
+    }, [payToken, receiveToken]);
 
     // Ambil saldo SOL (On-Chain)
     useEffect(() => {
@@ -146,7 +223,101 @@ function UtilifyApp() {
         router.post('/logout');
     };
 
-    // Deposit Realtime ke Server Laravel
+    const handleSwapDirection = () => {
+        setPayToken(receiveToken);
+        setReceiveToken(payToken);
+        setPayAmount(receiveAmount);
+        setReceiveAmount(payAmount);
+    };
+
+    const renderTokenOptions = (groups) => groups.map((group) => (
+        <optgroup key={group.label} label={group.label}>
+            {group.tokens.map((token) => <option key={token} value={token}>{token}</option>)}
+        </optgroup>
+    ));
+
+    const handleMaxPayAmount = () => {
+        if (payToken === 'SOL' && balance !== null) {
+            setPayAmount(Math.max(0, parseFloat(balance) - 0.001).toFixed(4));
+        }
+    };
+
+    const handleReviewSwap = async () => {
+        const amount = Number.parseFloat(payAmount);
+        if (!publicKey) {
+            setVisible(true);
+            return;
+        }
+        if (!Number.isFinite(amount) || amount <= 0) {
+            alert('Masukkan jumlah swap yang valid.');
+            return;
+        }
+        if (!TOKEN_MINTS[payToken] || !TOKEN_MINTS[receiveToken]) {
+            alert('Token ini belum memiliki alamat mint Solana yang terkonfigurasi.');
+            return;
+        }
+
+        setIsLoading(true);
+        setSwapStatus('Mengambil quote Jupiter...');
+        try {
+            const rawAmount = Math.round(amount * (10 ** TOKEN_DECIMALS[payToken]));
+            const quoteResponse = await fetch('/api/swap/quote', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': getCsrfToken(),
+                    'Accept': 'application/json',
+                },
+                credentials: 'same-origin',
+                body: JSON.stringify({
+                    inputMint: TOKEN_MINTS[payToken],
+                    outputMint: TOKEN_MINTS[receiveToken],
+                    amount: rawAmount,
+                    slippageBps: 50,
+                }),
+            });
+            const quote = await quoteResponse.json();
+            if (!quoteResponse.ok) {
+                throw new Error(quote.error || quote.message || quote.details || 'Quote Jupiter gagal.');
+            }
+
+            setSwapStatus('Menyiapkan transaksi swap...');
+            const transactionResponse = await fetch('/api/swap/transaction', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': getCsrfToken(),
+                    'Accept': 'application/json',
+                },
+                credentials: 'same-origin',
+                body: JSON.stringify({ quoteResponse: quote, userPublicKey: publicKey.toBase58() }),
+            });
+            const transactionData = await transactionResponse.json();
+            if (!transactionResponse.ok || !transactionData.swapTransaction) {
+                const detail = transactionData.details?.error || transactionData.details?.message;
+                throw new Error(transactionData.error || detail || 'Transaksi swap gagal dibuat.');
+            }
+
+            setSwapStatus('Membuka Solflare untuk konfirmasi...');
+            const transactionBytes = Uint8Array.from(atob(transactionData.swapTransaction), (character) => character.charCodeAt(0));
+            const transaction = VersionedTransaction.deserialize(transactionBytes);
+            const signature = await sendTransaction(transaction, connection);
+
+            setSwapStatus('Mengonfirmasi transaksi di blockchain...');
+            await connection.confirmTransaction(signature, 'confirmed');
+            alert(`Swap berhasil! Signature: ${signature.slice(0, 8)}...`);
+        } catch (error) {
+            console.error('Swap Error:', error);
+            alert(`Swap gagal: ${error.message || 'Transaksi dibatalkan.'}`);
+        } finally {
+            setIsLoading(false);
+            setSwapStatus('');
+        }
+    };
+
+    // Kirim SOL melalui Solflare, lalu catat saldo setelah transaksi terkonfirmasi.
     const handleDeposit = async () => {
         const amount = parseFloat(depositAmount);
         if (!depositAmount || isNaN(amount) || amount <= 0) {
@@ -154,8 +325,34 @@ function UtilifyApp() {
             return;
         }
 
+        if (!publicKey) {
+            setVisible(true);
+            return;
+        }
+
+        setIsDepositConfirmOpen(false);
+
         setIsLoading(true);
         try {
+            const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('finalized');
+            const transaction = new Transaction({
+                feePayer: publicKey,
+                recentBlockhash: blockhash,
+            }).add(
+                SystemProgram.transfer({
+                    fromPubkey: publicKey,
+                    toPubkey: new PublicKey(DEPOSIT_VAULT_ADDRESS),
+                    lamports: Math.round(amount * LAMPORTS_PER_SOL),
+                })
+            );
+
+            const signature = await sendTransaction(transaction, connection);
+            await connection.confirmTransaction({
+                signature,
+                blockhash,
+                lastValidBlockHeight,
+            }, 'processed');
+
             const res = await fetch('/api/private-balance/deposit', {
                 method: 'POST',
                 headers: {
@@ -165,7 +362,11 @@ function UtilifyApp() {
                     'Accept': 'application/json',
                 },
                 credentials: 'same-origin',
-                body: JSON.stringify({ amount }),
+                body: JSON.stringify({
+                    amount,
+                    signature,
+                    wallet_address: publicKey.toBase58(),
+                }),
             });
 
             const data = await res.json();
@@ -173,46 +374,54 @@ function UtilifyApp() {
             if (res.ok && data.success) {
                 setPrivateBalance(parseFloat(data.new_balance));
                 setDepositAmount('');
-                alert('Deposit berhasil!');
+                alert(`Top Up Berhasil! Signature: ${signature.slice(0, 8)}...`);
             } else {
-                alert(data.message || 'Gagal deposit. Pastikan kamu sudah login.');
+                throw new Error(data.message || `Server menolak deposit (HTTP ${res.status}).`);
             }
         } catch (error) {
             console.error('Error deposit:', error);
-            alert('Gagal terhubung ke server.');
+            const errorMessage = error?.message || '';
+            const readableError = /insufficient|insufficient funds|debit an account|not enough/i.test(errorMessage)
+                    ? 'Saldo SOL tidak cukup untuk nominal top up dan biaya transaksi.'
+                    : /internal error/i.test(errorMessage) && Number.parseFloat(balance || '0') <= 0
+                        ? 'Saldo SOL wallet 0. Solflare tidak dapat memproses transaksi tanpa SOL untuk biaya network.'
+                        : /internal error/i.test(errorMessage) && publicKey?.toBase58() === DEPOSIT_VAULT_ADDRESS
+                            ? 'Alamat vault sama dengan wallet pengirim. Gunakan wallet vault terpisah untuk top up pool.'
+                    : errorMessage || 'Terjadi kesalahan yang tidak diketahui.';
+            alert(`Top Up gagal: ${readableError}`);
         } finally {
             setIsLoading(false);
         }
     };
 
-    // Private Transfer
-    const handlePrivateSend = () => {
-        const amount = parseFloat(sendAmount);
-        if (!sendAmount || isNaN(amount) || amount <= 0) return alert('Masukkan jumlah transfer yang valid!');
-        if (!recipientAddress.trim()) return alert('Masukkan alamat penerima!');
-        if (privateBalance < amount) return alert('Saldo privat tidak mencukupi!');
-
-        setIsLoading(true);
-        setTimeout(() => {
-            setPrivateBalance((prev) => prev - amount);
-            setSendAmount('');
-            setRecipientAddress('');
-            setIsLoading(false);
-            alert(`Transaksi privat berhasil dikirim ke ${recipientAddress.slice(0, 6)}...`);
-        }, 1200);
+    const handleDepositRequest = () => {
+        const amount = Number.parseFloat(depositAmount);
+        if (!publicKey) {
+            setVisible(true);
+            return;
+        }
+        if (!Number.isFinite(amount) || amount <= 0) {
+            alert('Masukkan jumlah deposit yang valid.');
+            return;
+        }
+        setIsDepositConfirmOpen(true);
     };
 
-    // Bridge Transaction
-    const handleBridge = () => {
-        const amount = parseFloat(bridgeAmount);
-        if (!bridgeAmount || isNaN(amount) || amount <= 0) return alert('Masukkan jumlah Bridge yang valid!');
+    const handleTopUp = () => {
+        if (!publicKey) {
+            setVisible(true);
+            return;
+        }
 
-        setIsLoading(true);
-        setTimeout(() => {
-            setBridgeAmount('');
-            setIsLoading(false);
-            alert(`Bridge sebesar ${amount} SOL ke network ${targetChain} sedang diproses!`);
-        }, 1200);
+        setTopUpMessage('');
+        setIsTopUpOpen(true);
+    };
+
+    const handleCopyAddress = async () => {
+        if (!walletAddress) return;
+
+        await navigator.clipboard.writeText(walletAddress);
+        setTopUpMessage('Wallet address copied.');
     };
 
     return (
@@ -231,7 +440,7 @@ function UtilifyApp() {
                     <div className="text-2xl font-bold tracking-tighter text-[#c3c0ff]">No Trace</div>
 
                     <div className="hidden md:flex space-x-6 text-base">
-                        {['swap', 'bridge', 'deposit', 'send'].map((tab) => (
+                        {['swap', 'deposit'].map((tab) => (
                             <button
                                 key={tab}
                                 onClick={() => setActiveTab(tab)}
@@ -269,7 +478,7 @@ function UtilifyApp() {
 
                         <div className="hidden lg:flex items-center gap-2 bg-[#201f22] px-3 py-1.5 rounded-full border border-white/10">
                             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                            <span className="text-xs font-medium text-[#e5e1e4] font-mono">Solana Devnet</span>
+                            <span className="text-xs font-medium text-[#e5e1e4] font-mono">Solana Mainnet</span>
                         </div>
 
                         <CustomWalletButton />
@@ -306,55 +515,96 @@ function UtilifyApp() {
                         {/* SWAP TAB */}
                         {activeTab === 'swap' && (
                             <>
+                                <div className="flex items-center justify-between mb-4">
+                                    <div>
+                                        <p className="text-xs uppercase tracking-[0.2em] text-[#8f8d99] font-mono">Private swap</p>
+                                        <p className="mt-1 text-sm text-[#c7c4d8]">Trade tokens without leaving your wallet flow.</p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        aria-label="Swap settings"
+                                        title="Swap settings"
+                                        className="rounded-full border border-white/10 p-2 text-[#c7c4d8] hover:text-white hover:bg-white/5 cursor-pointer"
+                                    >
+                                        <span className="material-symbols-outlined text-[18px]">tune</span>
+                                    </button>
+                                </div>
                                 <div className="space-y-2 relative">
-                                    <div className="bg-[#09090B] border border-white/10 rounded-lg p-4 focus-within:border-[#c3c0ff] transition-colors">
-                                        <div className="flex justify-between text-[#c7c4d8] text-xs font-mono mb-2">
-                                            <span>You pay</span>
-                                            <span>Balance: {publicKey ? (balance !== null ? `${balance} SOL` : 'Loading...') : '0.00'}</span>
+                                    <div className="bg-[#09090B] border border-white/10 rounded-xl p-4 focus-within:border-[#c3c0ff] transition-colors">
+                                        <div className="flex justify-between text-[#8f8d99] text-xs font-mono mb-3">
+                                            <span>Pay</span>
+                                            <span>Balance: {publicKey ? (balance !== null ? `${balance} SOL` : 'Loading...') : '0.00 SOL'}</span>
                                         </div>
-                                        <div className="flex justify-between items-center">
+                                        <div className="flex justify-between items-center gap-4">
                                             <input
-                                                type="text"
+                                                type="number"
+                                                min="0"
+                                                step="any"
                                                 value={payAmount}
                                                 onChange={(e) => setPayAmount(e.target.value)}
-                                                className="bg-transparent text-2xl font-semibold text-[#e5e1e4] outline-none w-1/2"
+                                                className="bg-transparent text-3xl font-semibold text-[#e5e1e4] outline-none min-w-0 w-full"
                                                 placeholder="0"
                                             />
-                                            <button className="flex items-center gap-2 bg-[#201f22] px-3 py-1.5 rounded-full hover:bg-[#39393b] transition-colors border border-white/10 cursor-pointer">
-                                                <span className="text-xs font-mono">SOL</span>
-                                                <span className="material-symbols-outlined text-[16px]">expand_more</span>
-                                            </button>
+                                            <div className="flex items-center gap-2 shrink-0">
+                                                <button type="button" onClick={handleMaxPayAmount} className="text-[10px] font-mono text-[#c3c0ff] hover:text-white cursor-pointer">MAX</button>
+                                                <select
+                                                    value={payToken}
+                                                    onChange={(e) => setPayToken(e.target.value)}
+                                                    className="bg-[#201f22] text-[#e5e1e4] px-3 py-2 rounded-full border border-white/10 text-xs font-mono outline-none cursor-pointer"
+                                                >
+                                                    {renderTokenOptions(FROM_TOKEN_GROUPS)}
+                                                </select>
+                                            </div>
                                         </div>
                                     </div>
 
                                     <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10">
-                                        <button className="bg-[#39393b] p-2 rounded-full border border-white/10 text-[#e5e1e4] hover:text-[#c3c0ff] transition-all hover:rotate-180 duration-300 cursor-pointer">
+                                        <button onClick={handleSwapDirection} aria-label="Reverse swap" title="Reverse swap" className="bg-[#39393b] p-2 rounded-full border border-[#09090B] text-[#e5e1e4] hover:text-[#c3c0ff] transition-all hover:rotate-180 duration-300 cursor-pointer">
                                             <span className="material-symbols-outlined">swap_vert</span>
                                         </button>
                                     </div>
 
-                                    <div className="bg-[#09090B] border border-white/10 rounded-lg p-4 focus-within:border-[#c3c0ff] transition-colors">
-                                        <div className="flex justify-between text-[#c7c4d8] text-xs font-mono mb-2">
-                                            <span>You receive</span>
+                                    <div className="bg-[#09090B] border border-white/10 rounded-xl p-4 focus-within:border-[#c3c0ff] transition-colors">
+                                        <div className="flex justify-between text-[#8f8d99] text-xs font-mono mb-3">
+                                            <span>Receive</span>
+                                            <span>Estimated output</span>
                                         </div>
-                                        <div className="flex justify-between items-center">
+                                        <div className="flex justify-between items-center gap-4">
                                             <input
-                                                type="text"
-                                                value={receiveAmount}
-                                                onChange={(e) => setReceiveAmount(e.target.value)}
-                                                className="bg-transparent text-2xl font-semibold text-[#e5e1e4] outline-none w-1/2"
-                                                placeholder="0"
+                                                type="number"
+                                                min="0"
+                                                step="any"
+                                                value={quotedReceiveAmount}
+                                                readOnly
+                                                className="bg-transparent text-3xl font-semibold text-[#e5e1e4] outline-none min-w-0 w-full cursor-default"
                                             />
-                                            <button className="flex items-center gap-2 bg-[#4f46e5]/20 px-3 py-1.5 rounded-full hover:bg-[#4f46e5]/30 transition-colors border border-[#4f46e5]/30 text-[#c3c0ff] cursor-pointer">
-                                                <span className="text-xs font-mono">Select token</span>
-                                                <span className="material-symbols-outlined text-[16px]">expand_more</span>
-                                            </button>
+                                            <select
+                                                value={receiveToken}
+                                                onChange={(e) => setReceiveToken(e.target.value)}
+                                                className="bg-[#4f46e5]/20 text-[#c3c0ff] px-3 py-2 rounded-full border border-[#4f46e5]/30 text-xs font-mono outline-none cursor-pointer"
+                                            >
+                                                {renderTokenOptions(TO_TOKEN_GROUPS)}
+                                            </select>
                                         </div>
                                     </div>
                                 </div>
+                                <div className="flex justify-between mt-4 text-[11px] text-[#8f8d99] font-mono">
+                                    <span>Rate</span>
+                                    <span>
+                                        {isRateLoading ? 'Loading live rate...' : swapRate ? `1 ${payToken} ≈ ${(swapRate * 0.997).toFixed(6)} ${receiveToken}` : 'Rate unavailable'}
+                                    </span>
+                                </div>
+                                <div className="flex justify-end text-[11px] text-[#8f8d99] font-mono">
+                                    <span>{swapRate ? `1 ${receiveToken} ≈ ${(1 / swapRate).toFixed(6)} ${payToken}` : 'Select a supported pair'}</span>
+                                </div>
+                                {swapStatus && (
+                                    <div className="mt-3 rounded-lg border border-[#c3c0ff]/20 bg-[#4f46e5]/10 p-3 text-xs text-[#c3c0ff] font-mono animate-pulse">
+                                        {swapStatus}
+                                    </div>
+                                )}
                                 {publicKey ? (
-                                    <button className="w-full mt-6 bg-[#4f46e5] text-white py-4 rounded-lg text-xs font-mono hover:bg-[#4d44e3] transition-colors border border-[#c3c0ff]/20 cursor-pointer font-bold">
-                                        Review Swap
+                                    <button onClick={handleReviewSwap} disabled={isLoading} className="w-full mt-5 bg-[#4f46e5] text-white py-4 rounded-lg text-xs font-mono hover:bg-[#4d44e3] transition-colors border border-[#c3c0ff]/20 cursor-pointer font-bold disabled:opacity-50">
+                                        {isLoading ? 'Processing Swap...' : 'Review Swap'}
                                     </button>
                                 ) : (
                                     <div className="w-full mt-6 flex justify-center">
@@ -386,101 +636,154 @@ function UtilifyApp() {
                                     <span>Private Balance: {privateBalance.toFixed(4)} SOL</span>
                                 </div>
                                 <button
-                                    onClick={handleDeposit}
+                                    onClick={handleDepositRequest}
                                     disabled={isLoading}
                                     className="w-full bg-[#4f46e5] text-white py-4 rounded text-sm font-mono hover:bg-[#4d44e3] transition-colors flex justify-center items-center gap-2 disabled:opacity-50 cursor-pointer font-bold"
                                 >
                                     {isLoading ? 'Processing Deposit...' : 'Top Up Private Pool'}
                                 </button>
+                                <button
+                                    onClick={handleTopUp}
+                                    className="w-full border border-[#c3c0ff]/30 bg-[#c3c0ff]/10 text-[#c3c0ff] py-3 rounded text-sm font-mono hover:bg-[#c3c0ff]/20 transition-colors flex justify-center items-center gap-2 cursor-pointer"
+                                >
+                                    <span className="material-symbols-outlined text-[18px]">qr_code_2</span>
+                                    {publicKey ? 'Top Up Connected Wallet' : 'Connect Wallet to Top Up'}
+                                </button>
+                                {topUpMessage && <p className="text-xs text-[#c3c0ff] font-mono">{topUpMessage}</p>}
                             </div>
                         )}
 
-                        {/* SEND TAB */}
-                        {activeTab === 'send' && (
-                            <div className="space-y-4">
-                                <div className="bg-[#09090B] p-4 rounded border border-white/10">
-                                    <label className="text-xs text-gray-400">Recipient Address</label>
-                                    <input
-                                        type="text"
-                                        value={recipientAddress}
-                                        onChange={(e) => setRecipientAddress(e.target.value)}
-                                        className="bg-transparent text-sm outline-none w-full mt-1 font-mono text-[#c7c4d8]"
-                                        placeholder="Enter wallet address (Solana / EVM)"
-                                    />
-                                </div>
-                                <div className="bg-[#09090B] p-4 rounded border border-white/10">
-                                    <label className="text-xs text-gray-400">Amount to Send</label>
-                                    <input
-                                        type="number"
-                                        step="any"
-                                        value={sendAmount}
-                                        onChange={(e) => setSendAmount(e.target.value)}
-                                        className="bg-transparent text-lg outline-none w-full mt-1"
-                                        placeholder="0.0"
-                                    />
-                                </div>
-                                <button
-                                    onClick={handlePrivateSend}
-                                    disabled={isLoading}
-                                    className="w-full bg-[#4f46e5] text-white py-4 rounded text-sm font-mono hover:bg-[#4d44e3] transition-colors flex justify-center items-center gap-2 disabled:opacity-50 cursor-pointer font-bold"
-                                >
-                                    {isLoading ? 'Processing Transfer...' : 'Send Private Transfer'}
-                                </button>
-                            </div>
-                        )}
-
-                        {/* BRIDGE TAB */}
-                        {activeTab === 'bridge' && (
-                            <div className="space-y-4">
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div className="bg-[#09090B] p-3 rounded border border-white/10">
-                                        <span className="text-xs text-gray-400">From</span>
-                                        <div className="text-sm font-bold mt-1">Solana</div>
-                                    </div>
-                                    <div className="bg-[#09090B] p-3 rounded border border-white/10">
-                                        <span className="text-xs text-gray-400">To</span>
-                                        <select
-                                            value={targetChain}
-                                            onChange={(e) => setTargetChain(e.target.value)}
-                                            className="w-full bg-transparent text-sm font-bold mt-1 outline-none cursor-pointer text-white"
-                                        >
-                                            <option value="Ethereum" className="bg-[#09090B]">Ethereum</option>
-                                            <option value="Base" className="bg-[#09090B]">Base (L2)</option>
-                                            <option value="BNB Chain" className="bg-[#09090B]">BNB Chain</option>
-                                            <option value="Polygon" className="bg-[#09090B]">Polygon</option>
-                                        </select>
-                                    </div>
-                                </div>
-                                <div className="bg-[#09090B] p-4 rounded border border-white/10">
-                                    <label className="text-xs text-gray-400">Bridge Amount</label>
-                                    <input
-                                        type="number"
-                                        step="any"
-                                        value={bridgeAmount}
-                                        onChange={(e) => setBridgeAmount(e.target.value)}
-                                        className="bg-transparent text-lg outline-none w-full mt-1"
-                                        placeholder="0.0"
-                                    />
-                                </div>
-                                <button
-                                    onClick={handleBridge}
-                                    disabled={isLoading}
-                                    className="w-full bg-[#4f46e5] text-white py-4 rounded text-sm font-mono hover:bg-[#4d44e3] transition-colors flex justify-center items-center gap-2 disabled:opacity-50 cursor-pointer font-bold"
-                                >
-                                    {isLoading ? 'Processing Bridge...' : `Bridge to ${targetChain}`}
-                                </button>
-                            </div>
-                        )}
                     </div>
                 </section>
             </main>
+
+            {isDepositConfirmOpen && publicKey && (
+                <div
+                    className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 px-5 backdrop-blur-sm"
+                    onClick={() => setIsDepositConfirmOpen(false)}
+                >
+                    <div
+                        className="w-full max-w-md rounded-xl border border-white/10 bg-[#18181B] p-6 shadow-2xl"
+                        onClick={(event) => event.stopPropagation()}
+                    >
+                        <div className="flex items-start justify-between">
+                            <div>
+                                <p className="text-xs font-mono uppercase tracking-[0.18em] text-[#8f8d99]">Solana Top Up</p>
+                                <h2 className="mt-1 text-2xl font-semibold text-[#e5e1e4]">Review deposit</h2>
+                            </div>
+                            <button
+                                onClick={() => setIsDepositConfirmOpen(false)}
+                                className="text-[#c7c4d8] transition-colors hover:text-white cursor-pointer"
+                                aria-label="Close top up confirmation"
+                            >
+                                <span className="material-symbols-outlined">close</span>
+                            </button>
+                        </div>
+
+                        <div className="mt-6 space-y-3 rounded-lg border border-white/10 bg-[#09090B] p-4">
+                            <div className="flex justify-between text-sm text-[#c7c4d8]">
+                                <span>Wallet</span>
+                                <span className="font-mono text-[#e5e1e4]">{wallet?.adapter?.name || 'Solana Wallet'}</span>
+                            </div>
+                            <div className="flex justify-between text-sm text-[#c7c4d8]">
+                                <span>Available balance</span>
+                                <span className="font-mono text-[#e5e1e4]">{balance !== null ? `${balance} SOL` : 'Loading...'}</span>
+                            </div>
+                            <div className="border-t border-white/10 pt-3 flex justify-between text-base font-semibold text-[#e5e1e4]">
+                                <span>Top up amount</span>
+                                <span className="font-mono text-[#c3c0ff]">{Number.parseFloat(depositAmount).toFixed(6)} SOL</span>
+                            </div>
+                        </div>
+
+                        <p className="mt-4 text-sm leading-6 text-[#c7c4d8]">
+                            Solflare akan membuka pop-up untuk meminta persetujuan transaksi. Dana akan dikirim ke vault private pool setelah Anda menyetujuinya.
+                        </p>
+
+                        <div className="mt-6 flex gap-3">
+                            <button
+                                onClick={() => setIsDepositConfirmOpen(false)}
+                                className="flex-1 rounded-lg border border-white/10 bg-[#2a2a2c] py-3 text-xs font-mono text-[#e5e1e4] transition-colors hover:bg-[#39393b] cursor-pointer"
+                            >
+                                Batal
+                            </button>
+                            <button
+                                onClick={handleDeposit}
+                                disabled={isLoading}
+                                className="flex-1 rounded-lg bg-[#4f46e5] py-3 text-xs font-mono text-white transition-colors hover:bg-[#4d44e3] disabled:opacity-50 cursor-pointer"
+                            >
+                                Lanjutkan di Solflare
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {isTopUpOpen && publicKey && (
+                <div
+                    className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 px-5 backdrop-blur-sm"
+                    onClick={() => setIsTopUpOpen(false)}
+                >
+                    <div
+                        className="w-full max-w-md rounded-xl border border-white/10 bg-[#18181B] p-6 shadow-2xl"
+                        onClick={(event) => event.stopPropagation()}
+                    >
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-xs font-mono text-[#c7c4d8]">Top Up</p>
+                                <h2 className="mt-1 text-2xl font-semibold text-[#e5e1e4]">Receive SOL</h2>
+                            </div>
+                            <button
+                                onClick={() => setIsTopUpOpen(false)}
+                                className="text-[#c7c4d8] transition-colors hover:text-white cursor-pointer"
+                                aria-label="Close top up popup"
+                            >
+                                <span className="material-symbols-outlined">close</span>
+                            </button>
+                        </div>
+
+                        <div className="mt-6 rounded-lg border border-[#c3c0ff]/20 bg-[#09090B] p-5">
+                            <div className="mb-3 flex justify-between text-xs font-mono text-[#c7c4d8]">
+                                <span>Connected wallet</span>
+                                <span className="text-[#c3c0ff]">{wallet?.adapter?.name || 'Wallet'}</span>
+                            </div>
+                            <div className="flex justify-center rounded-lg bg-white p-4">
+                                <QRCodeSVG value={paymentUri} size={220} level="H" includeMargin />
+                            </div>
+                            <p className="mt-4 break-all text-center text-xs font-mono leading-5 text-[#e5e1e4]">{walletAddress}</p>
+                        </div>
+
+                        <p className="mt-4 text-sm leading-6 text-[#c7c4d8]">
+                            Scan this QR code from another wallet to send SOL to your connected wallet. The amount follows the Amount field when provided.
+                        </p>
+
+                        <div className="mt-6 flex gap-3">
+                            <button
+                                onClick={handleCopyAddress}
+                                className="flex-1 rounded-lg border border-white/10 bg-[#2a2a2c] py-3 text-xs font-mono text-[#e5e1e4] transition-colors hover:bg-[#39393b] cursor-pointer"
+                            >
+                                <span className="material-symbols-outlined mr-2 align-middle text-[16px]">content_copy</span>
+                                Copy Address
+                            </button>
+                            <button
+                                onClick={() => setIsTopUpOpen(false)}
+                                className="flex-1 rounded-lg bg-[#4f46e5] py-3 text-xs font-mono text-white transition-colors hover:bg-[#4d44e3] cursor-pointer"
+                            >
+                                Done
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
 
 // --- WRAPPER UTAMA ---
 export default function Welcome() {
-    const endpoint = useMemo(() => clusterApiUrl('devnet'), []);
+    const endpoint = useMemo(
+        () => import.meta.env.VITE_SOLANA_RPC_URL || 'https://solana-rpc.publicnode.com',
+        []
+    );
     const wallets = useMemo(() => [new SolflareWalletAdapter()], []);
 
     return (
