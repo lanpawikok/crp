@@ -303,7 +303,8 @@ function UtilifyApp() {
 
     const handleMaxPayAmount = () => {
         if (payToken === 'SOL' && balance !== null) {
-            setPayAmount(Math.max(0, parseFloat(balance) - 0.001).toFixed(4));
+            const maxAmount = Math.max(0, parseFloat(balance) - 0.001).toFixed(4).replace(/0+$/, '').replace(/\.$/, '');
+            setPayAmount(maxAmount.includes('.') ? maxAmount : `${maxAmount}.0`);
         }
     };
 
