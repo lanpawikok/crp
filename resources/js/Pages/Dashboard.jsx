@@ -630,12 +630,12 @@ function UtilifyApp({ activeNetwork, onSelectNetwork }) {
                 throw new Error(transactionData.error || detail || 'Transaksi swap gagal dibuat.');
             }
 
-            setSwapStatus('Membuka Solflare untuk konfirmasi...');
+            setSwapStatus('Open Solflare To Confirm...');
             const transactionBytes = Uint8Array.from(atob(transactionData.swapTransaction), (character) => character.charCodeAt(0));
             const transaction = VersionedTransaction.deserialize(transactionBytes);
             const signature = await sendTransaction(transaction, connection);
 
-            setSwapStatus('Mengonfirmasi transaksi di blockchain...');
+            setSwapStatus('Confirm the transaction in Blockchain...');
             await connection.confirmTransaction(signature, 'confirmed');
             await fetchBalances();
             setTransactionNotice({ type: 'success', title: 'Swap berhasil', message: `${amount} ${payToken} berhasil ditukar menjadi ${quotedReceiveAmount} ${receiveToken}.`, signature });
