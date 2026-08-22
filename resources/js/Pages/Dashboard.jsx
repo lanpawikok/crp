@@ -113,7 +113,9 @@ const SOLANA_NETWORKS = {
         name: 'Solana Mainnet',
         shortName: 'Mainnet',
         network: WalletAdapterNetwork.Mainnet,
-        endpoint: import.meta.env.VITE_SOLANA_MAINNET_RPC || 'https://api.mainnet-beta.solana.com',
+        // RPC publik mainnet (api.mainnet-beta.solana.com) memblokir request dari browser (403),
+        // jadi default-nya memakai PublicNode yang gratis, stabil, dan bebas CORS.
+        endpoint: import.meta.env.VITE_SOLANA_MAINNET_RPC || 'https://solana-rpc.publicnode.com',
         color: 'bg-emerald-400',
         textColor: 'text-emerald-400',
         borderColor: 'border-emerald-400/30',

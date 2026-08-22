@@ -3,6 +3,11 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+
+    <!-- Logo / Favicon untuk Tab Browser -->
+    <link rel="icon" type="image/jpeg" href="{{ asset('img/notracefi.jpeg') }}">
+
     <title>No Trace</title>
 
     <!-- PANGGIL MATERIAL SYMBOLS DI SINI -->
@@ -11,7 +16,7 @@
     @viteReactRefresh
     @vite(['resources/js/app.jsx'])
 </head>
-<body class="bg-[#09090B]">
-    @inertia <!-- atau <div id="app"></div> jika SPA murni -->
+<body class="bg-[#09090B] text-white">
+    @inertia 
 </body>
 </html>

@@ -4,6 +4,7 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Admin\AdminController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Api\PrivateBalanceController;
+use App\Http\Controllers\Api\JupiterController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -25,6 +26,12 @@ Route::middleware('auth')->group(function () {
     Route::get('/api/private-balance', [PrivateBalanceController::class, 'index']);
     Route::post('/api/private-balance/deposit', [PrivateBalanceController::class, 'deposit']);
     Route::post('/api/private-balance/deposit-solflare', [PrivateBalanceController::class, 'depositSolflare']);
+
+    // Swap via Jupiter memakai auth session (web) agar konsisten dengan private-balance.
+    // Route duplikat di routes/api.php (auth:sanctum) mengembalikan 401 karena
+    // session SPA tidak dikenali sebagai stateful.
+    Route::post('/api/swap/quote', [JupiterController::class, 'quote']);
+    Route::post('/api/swap/transaction', [JupiterController::class, 'swap']);
 
 });
 
