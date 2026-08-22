@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { ConnectionProvider, WalletProvider, useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { WalletModalProvider, useWalletModal } from '@solana/wallet-adapter-react-ui';
 import { SolflareWalletAdapter } from '@solana/wallet-adapter-wallets';
@@ -24,6 +24,14 @@ const encodeU64 = (value) => {
     return bytes;
 };
 
+const decodeU64 = (bytes) => {
+    let value = 0n;
+    for (let index = 7; index >= 0; index -= 1) {
+        value = (value << 8n) + BigInt(bytes[index]);
+    }
+    return value;
+};
+
 const concatBytes = (...parts) => {
     const length = parts.reduce((total, part) => total + part.length, 0);
     const result = new Uint8Array(length);
@@ -34,18 +42,22 @@ const concatBytes = (...parts) => {
     });
     return result;
 };
+
 const FROM_TOKEN_GROUPS = [
     { label: 'Top', tokens: ['SOL', 'USDC', 'USDT'] },
     { label: 'Yield', tokens: ['stORE'] },
     { label: 'Others', tokens: ['ORE', 'ZEC'] },
 ];
+
 const TOKEN_MINTS = {
     SOL: 'So11111111111111111111111111111111111111112',
     USDC: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
     USDT: 'Es9vMFrzaCERmJfrF4H2FYD4uF1qjQ7wN1YfH6mJg4T',
     stORE: 'sTorERYB6xAZ1SSbwpK3zoK2EEwbBrc7TZAzg1uCGiH',
 };
+
 const TOKEN_DECIMALS = { SOL: 9, USDC: 6, USDT: 6, stORE: 11 };
+
 const TOKEN_PRICE_IDS = {
     SOL: 'solana',
     USDC: 'usd-coin',
@@ -62,6 +74,7 @@ const TOKEN_LOGOS = {
     ORE: 'https://www.privacycash.org/token_logos/ore.png',
     ZEC: 'https://www.privacycash.org/token_logos/zec.png',
 };
+
 const TOKEN_COLORS = {
     SOL: 'bg-[#8b8bff] text-[#17172a]',
     USDC: 'bg-[#2775ca] text-white',
@@ -70,6 +83,9 @@ const TOKEN_COLORS = {
     ORE: 'bg-[#d27b42] text-[#24140b]',
     ZEC: 'bg-[#f4b728] text-[#2a1b00]',
 };
+
+// ─── DEVNET RPC ─────────────────────────────────────────────────────────────
+const DEVNET_RPC = import.meta.env.VITE_SOLANA_RPC_URL || 'https://api.devnet.solana.com';
 
 function TokenLogo({ token, size = 'h-7 w-7' }) {
     return (
@@ -97,7 +113,6 @@ function TokenSelect({ value, groups, onChange }) {
                 setIsOpen(false);
             }
         };
-
         document.addEventListener('mousedown', handleOutsideClick);
         return () => document.removeEventListener('mousedown', handleOutsideClick);
     }, []);
@@ -143,7 +158,6 @@ function TokenSelect({ value, groups, onChange }) {
 
 function TransactionNotice({ notice, onClose }) {
     if (!notice) return null;
-
     const isSuccess = notice.type === 'success';
 
     return (
@@ -178,12 +192,10 @@ function TransactionNotice({ notice, onClose }) {
     );
 }
 
-// --- HELPER UNTUK CSRF TOKEN LARAVEL ---
 const getCsrfToken = () => {
     return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 };
 
-// --- KOMPONEN CUSTOM TOMBOL WALLET ---
 function CustomWalletButton() {
     const { publicKey, disconnect, wallet, connecting } = useWallet();
     const { setVisible } = useWalletModal();
@@ -238,20 +250,25 @@ function CustomWalletButton() {
     );
 }
 
-// --- KOMPONEN UTAMA ---
 function UtilifyApp() {
     const { publicKey, wallet, sendTransaction } = useWallet();
     const { connection } = useConnection();
-    const vaultConnection = useMemo(() => new Connection('https://api.devnet.solana.com', 'confirmed'), []);
+
+    const vaultConnection = useMemo(
+        () => new Connection(DEVNET_RPC, 'confirmed'),
+        []
+    );
+
     const { setVisible } = useWalletModal();
     const { auth } = usePage().props;
 
-    // State Saldo & Tab
     const [balance, setBalance] = useState(null);
+    const [privatePoolBalance, setPrivatePoolBalance] = useState(null);
+    const [accountBalance, setAccountBalance] = useState(null);
+    const [isBalanceRefreshing, setIsBalanceRefreshing] = useState(false);
     const [activeTab, setActiveTab] = useState('swap');
     const [isLoading, setIsLoading] = useState(false);
 
-    // State Input
     const [payAmount, setPayAmount] = useState('0.0');
     const [receiveAmount, setReceiveAmount] = useState('0.0');
     const [payToken, setPayToken] = useState('SOL');
@@ -261,7 +278,6 @@ function UtilifyApp() {
     const [isRateLoading, setIsRateLoading] = useState(false);
     const [transactionNotice, setTransactionNotice] = useState(null);
 
-    // State wallet balance & deposit form
     const [depositAmount, setDepositAmount] = useState('');
     const [isTopUpOpen, setIsTopUpOpen] = useState(false);
     const [isDepositConfirmOpen, setIsDepositConfirmOpen] = useState(false);
@@ -272,15 +288,71 @@ function UtilifyApp() {
     const paymentUri = walletAddress
         ? `solana:${walletAddress}${Number.isFinite(numericTopUpAmount) && numericTopUpAmount > 0 ? `?amount=${numericTopUpAmount}&label=No%20Trace%20Top%20Up` : ''}`
         : '';
+
     const payTokenPrice = tokenPrices[payToken];
     const receiveTokenPrice = tokenPrices[receiveToken];
-    const swapRate = payTokenPrice && receiveTokenPrice
-        ? payTokenPrice / receiveTokenPrice
-        : null;
+    const swapRate = payTokenPrice && receiveTokenPrice ? payTokenPrice / receiveTokenPrice : null;
     const quotedReceiveAmount = swapRate && Number.parseFloat(payAmount) > 0
         ? (Number.parseFloat(payAmount) * swapRate * 0.997).toFixed(6)
         : '--';
     const isStorePair = payToken === 'stORE' || receiveToken === 'stORE';
+
+    const fetchBalances = useCallback(async () => {
+        if (!publicKey) {
+            setBalance(null);
+            setPrivatePoolBalance(null);
+            setAccountBalance(null);
+            return;
+        }
+
+        setIsBalanceRefreshing(true);
+        try {
+            const lamports = await vaultConnection.getBalance(publicKey);
+            setBalance((lamports / LAMPORTS_PER_SOL).toFixed(4));
+        } catch (error) {
+            console.error('Gagal mengambil saldo SOL:', error);
+        }
+
+        try {
+            const [userVault] = PublicKey.findProgramAddressSync(
+                [USER_VAULT_SEED, publicKey.toBytes()],
+                USER_VAULT_PROGRAM_ID
+            );
+            const accountInfo = await vaultConnection.getAccountInfo(userVault, 'confirmed');
+            const isVault = accountInfo?.owner.equals(USER_VAULT_PROGRAM_ID) && accountInfo.data.length >= 48;
+            const depositedLamports = isVault ? decodeU64(accountInfo.data.subarray(40, 48)) : 0n;
+            setPrivatePoolBalance((Number(depositedLamports) / LAMPORTS_PER_SOL).toFixed(6));
+        } catch (error) {
+            console.error('Gagal mengambil saldo Private Pool:', error);
+            setPrivatePoolBalance(null);
+        }
+
+        if (auth?.user) {
+            try {
+                const res = await fetch('/api/private-balance', {
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'application/json',
+                    },
+                    credentials: 'same-origin',
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data?.balance !== undefined) {
+                        setAccountBalance(Number(data.balance).toFixed(6));
+                    }
+                }
+            } catch (error) {
+                console.error('Gagal mengambil saldo database:', error);
+            }
+        }
+
+        setIsBalanceRefreshing(false);
+    }, [publicKey, vaultConnection, auth?.user]);
+
+    useEffect(() => {
+        fetchBalances();
+    }, [fetchBalances]);
 
     useEffect(() => {
         const tokenIds = [...new Set([payToken, receiveToken].map((token) => TOKEN_PRICE_IDS[token]).filter(Boolean))];
@@ -321,40 +393,12 @@ function UtilifyApp() {
                 Object.assign(normalizedPrices, storePrices);
                 setTokenPrices(normalizedPrices);
             })
-            .catch(() => {
-                if (isMounted) setTokenPrices({});
-            })
-            .finally(() => {
-                if (isMounted) setIsRateLoading(false);
-            });
+            .catch(() => { if (isMounted) setTokenPrices({}); })
+            .finally(() => { if (isMounted) setIsRateLoading(false); });
 
         return () => { isMounted = false; };
     }, [payToken, receiveToken]);
 
-    // Ambil saldo SOL (On-Chain)
-    useEffect(() => {
-        if (!publicKey) {
-            setBalance(null);
-            return;
-        }
-
-        let isMounted = true;
-        const fetchBalance = async () => {
-            try {
-                const lamports = await connection.getBalance(publicKey);
-                if (isMounted) {
-                    setBalance((lamports / LAMPORTS_PER_SOL).toFixed(4));
-                }
-            } catch (error) {
-                console.error('Gagal mengambil saldo SOL:', error);
-            }
-        };
-
-        fetchBalance();
-        return () => { isMounted = false; };
-    }, [publicKey, connection]);
-
-    // Fungsi Logout melalui Inertia
     const handleLogout = (e) => {
         e.preventDefault();
         router.post('/logout');
@@ -386,21 +430,22 @@ function UtilifyApp() {
 
     const handleMaxPayAmount = () => {
         if (payToken === 'SOL' && balance !== null) {
-            const maxAmount = Math.max(0, parseFloat(balance) - 0.001).toFixed(4).replace(/0+$/, '').replace(/\.$/, '');
+            const maxAmount = Math.max(0, parseFloat(balance) - 0.005).toFixed(4).replace(/0+$/, '').replace(/\.$/, '');
             setPayAmount(maxAmount.includes('.') ? maxAmount : `${maxAmount}.0`);
         }
     };
 
+    const handleSetDepositPercentage = (percent) => {
+        if (!balance || parseFloat(balance) <= 0) return;
+        const available = Math.max(0, parseFloat(balance) - 0.005);
+        const calculated = (available * (percent / 100)).toFixed(4).replace(/0+$/, '').replace(/\.$/, '');
+        setDepositAmount(calculated && parseFloat(calculated) > 0 ? (calculated.includes('.') ? calculated : `${calculated}.0`) : '0.0');
+    };
+
     const handleReviewSwap = async () => {
         const amount = Number.parseFloat(payAmount);
-        if (!publicKey) {
-            setVisible(true);
-            return;
-        }
-        if (connection.rpcEndpoint.includes('devnet')) {
-            setTransactionNotice({ type: 'error', title: 'Swap unavailable on Devnet', message: 'Switch to Solana Mainnet to use Jupiter swap. Your PDA top up is currently running on Devnet.' });
-            return;
-        }
+        if (!publicKey) { setVisible(true); return; }
+
         if (!Number.isFinite(amount) || amount <= 0) {
             setTransactionNotice({ type: 'error', title: 'Invalid swap amount', message: 'Masukkan jumlah swap yang lebih besar dari 0.' });
             return;
@@ -480,7 +525,7 @@ function UtilifyApp() {
 
             setSwapStatus('Mengonfirmasi transaksi di blockchain...');
             await connection.confirmTransaction(signature, 'confirmed');
-            setBalance((await connection.getBalance(publicKey) / LAMPORTS_PER_SOL).toFixed(4));
+            await fetchBalances();
             setTransactionNotice({ type: 'success', title: 'Swap berhasil', message: `${amount} ${payToken} berhasil ditukar menjadi ${quotedReceiveAmount} ${receiveToken}.`, signature });
         } catch (error) {
             console.error('Swap Error:', error);
@@ -496,21 +541,15 @@ function UtilifyApp() {
         }
     };
 
-    // Kirim SOL melalui Solflare, lalu catat saldo setelah transaksi terkonfirmasi.
     const handleDeposit = async () => {
         const amount = parseFloat(depositAmount);
         if (!depositAmount || isNaN(amount) || amount <= 0) {
             setTransactionNotice({ type: 'error', title: 'Invalid Top Up Amount', message: 'Please enter a top up amount greater than 0.' });
             return;
         }
-
-        if (!publicKey) {
-            setVisible(true);
-            return;
-        }
+        if (!publicKey) { setVisible(true); return; }
 
         setIsDepositConfirmOpen(false);
-
         setIsLoading(true);
         try {
             const { blockhash, lastValidBlockHeight } = await vaultConnection.getLatestBlockhash('finalized');
@@ -541,19 +580,38 @@ function UtilifyApp() {
             }));
 
             const transaction = new Transaction({ feePayer: publicKey, recentBlockhash: blockhash }).add(...instructions);
-
             const signature = await sendTransaction(transaction, vaultConnection);
-            await vaultConnection.confirmTransaction({
-                signature,
-                blockhash,
-                lastValidBlockHeight,
-            }, 'processed');
-            setBalance((await vaultConnection.getBalance(publicKey) / LAMPORTS_PER_SOL).toFixed(4));
+            await vaultConnection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, 'processed');
+            await fetchBalances();
+
+            // Opsional: sinkronkan riwayat deposit ke server Laravel jika user sedang login
+            if (auth?.user) {
+                try {
+                    await fetch('/api/private-balance/deposit', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'X-CSRF-TOKEN': getCsrfToken(),
+                            'Accept': 'application/json',
+                        },
+                        credentials: 'same-origin',
+                        body: JSON.stringify({
+                            amount: amount,
+                            signature: signature,
+                            wallet_address: publicKey.toBase58(),
+                        }),
+                    });
+                } catch (syncErr) {
+                    console.warn('Sync database error:', syncErr);
+                }
+            }
+
             setDepositAmount('');
-            setTransactionNotice({ type: 'success', title: 'Top Up Successful', message: `${amount} SOL was sent to the private pool vault.`, signature });
+            setTransactionNotice({ type: 'success', title: 'Top Up Successful', message: `${amount} SOL berhasil disimpan ke Private Pool Vault on-chain.`, signature });
         } catch (error) {
             console.error('Error deposit:', error);
-            setTransactionNotice({ type: 'error', title: 'Top Up Failed', message: 'Please have at least, 0.01 SOL in your wallet' });
+            setTransactionNotice({ type: 'error', title: 'Top Up Failed', message: error.message || 'Please have at least 0.01 SOL in your wallet.' });
         } finally {
             setIsLoading(false);
         }
@@ -561,10 +619,7 @@ function UtilifyApp() {
 
     const handleDepositRequest = () => {
         const amount = Number.parseFloat(depositAmount);
-        if (!publicKey) {
-            setVisible(true);
-            return;
-        }
+        if (!publicKey) { setVisible(true); return; }
         if (!Number.isFinite(amount) || amount <= 0) {
             setTransactionNotice({ type: 'error', title: 'Invalid Top Up Amount', message: 'Please enter a top up amount greater than 0.' });
             return;
@@ -573,33 +628,24 @@ function UtilifyApp() {
     };
 
     const handleTopUp = () => {
-        if (!publicKey) {
-            setVisible(true);
-            return;
-        }
-
+        if (!publicKey) { setVisible(true); return; }
         setTopUpMessage('');
         setIsTopUpOpen(true);
     };
 
     const handleCopyAddress = async () => {
         if (!walletAddress) return;
-
         await navigator.clipboard.writeText(walletAddress);
         setTopUpMessage('Wallet address copied.');
     };
 
     return (
         <div className="antialiased min-h-screen flex flex-col bg-[#09090B] text-[#e5e1e4] font-sans relative overflow-x-hidden">
-            {/* Background Radial Glow */}
             <div
                 className="absolute top-[-20%] left-1/2 -translate-x-1/2 w-[800px] h-[800px] z-0 pointer-events-none"
-                style={{
-                    background: 'radial-gradient(circle, rgba(79, 70, 229, 0.15) 0%, rgba(9, 9, 11, 0) 70%)',
-                }}
+                style={{ background: 'radial-gradient(circle, rgba(79, 70, 229, 0.15) 0%, rgba(9, 9, 11, 0) 70%)' }}
             />
 
-            {/* Top Navbar */}
             <nav className="fixed top-0 w-full z-50 bg-[#18181B]/80 backdrop-blur-xl border-b border-white/10 shadow-sm">
                 <div className="flex justify-between items-center h-16 px-6 md:px-10 max-w-[1280px] mx-auto">
                     <div className="text-2xl font-bold tracking-tighter text-[#c3c0ff]">No Trace</div>
@@ -620,7 +666,7 @@ function UtilifyApp() {
                         ))}
                     </div>
 
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-3 md:gap-4">
                         {auth?.user && (
                             <div className="flex items-center gap-3">
                                 {auth.user.email === 'admin@notracefi.test' && (
@@ -641,9 +687,26 @@ function UtilifyApp() {
                             </div>
                         )}
 
+                        {publicKey && (
+                            <div className="hidden xl:flex items-center gap-3 bg-[#18181B] border border-white/10 rounded-full px-3.5 py-1.5 text-xs font-mono">
+                                <div className="flex items-center gap-1.5" title="Saldo E-Wallet Anda">
+                                    <span className="text-[#8f8d99]">Wallet:</span>
+                                    <span className="text-[#e5e1e4] font-medium">{balance !== null ? `${balance} SOL` : '...'}</span>
+                                </div>
+                                <span className="text-white/20">|</span>
+                                <div className="flex items-center gap-1.5" title="Saldo Private Pool Vault Anda">
+                                    <span className="text-[#a9a5c9] flex items-center gap-1">
+                                        <span className="material-symbols-outlined text-[14px] text-emerald-400">shield</span>
+                                        Pool:
+                                    </span>
+                                    <span className="text-[#c3c0ff] font-medium">{privatePoolBalance !== null ? `${privatePoolBalance} SOL` : '...'}</span>
+                                </div>
+                            </div>
+                        )}
+
                         <div className="hidden lg:flex items-center gap-2 bg-[#201f22] px-3 py-1.5 rounded-full border border-white/10">
-                            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                            <span className="text-xs font-medium text-[#e5e1e4] font-mono">Solana Mainnet</span>
+                            <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                            <span className="text-xs font-medium text-[#e5e1e4] font-mono">Solana Devnet</span>
                         </div>
 
                         <CustomWalletButton />
@@ -651,9 +714,8 @@ function UtilifyApp() {
                 </div>
             </nav>
 
-            {/* Main Section */}
-            <main className="flex-grow pt-24 pb-16 px-5 md:px-10 max-w-[1280px] mx-auto w-full relative z-10 flex flex-col gap-16">
-                <section className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+            <main className="flex-grow pt-24 pb-16 px-5 md:px-10 max-w-[1280px] mx-auto w-full relative z-10 flex flex-col gap-12">
+                <section className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-start">
                     <div className="space-y-6">
                         <h1 className="text-3xl md:text-5xl font-bold text-[#e5e1e4] tracking-tight leading-tight">
                             The Universal <br />
@@ -662,22 +724,118 @@ function UtilifyApp() {
                         <p className="text-base text-[#c7c4d8] max-w-md">
                             Seamlessly swap tokens, bridge across networks, and manage private liquidity pools from a high-performance terminal.
                         </p>
-                        <div className="flex gap-4">
-                            <button className="bg-[#2a2a2c] border border-white/10 text-[#e5e1e4] px-6 py-3 rounded-full text-xs font-mono hover:bg-[#39393b] transition-colors flex items-center gap-2 cursor-pointer">
-                                <span className="material-symbols-outlined text-[18px]">explore</span>
-                                Explore Tools
+                        
+                        <div className="flex flex-wrap items-center gap-3">
+                            <button 
+                                onClick={() => setActiveTab('deposit')}
+                                className="bg-[#4f46e5] border border-[#c3c0ff]/30 text-white px-5 py-2.5 rounded-full text-xs font-mono hover:bg-[#4d44e3] transition-colors flex items-center gap-2 cursor-pointer shadow-lg shadow-[#4f46e5]/20"
+                            >
+                                <span className="material-symbols-outlined text-[18px]">add_circle</span>
+                                Deposit Private Pool
                             </button>
+                            <button 
+                                onClick={() => setActiveTab('swap')}
+                                className="bg-[#2a2a2c] border border-white/10 text-[#e5e1e4] px-5 py-2.5 rounded-full text-xs font-mono hover:bg-[#39393b] transition-colors flex items-center gap-2 cursor-pointer"
+                            >
+                                <span className="material-symbols-outlined text-[18px]">swap_horiz</span>
+                                Private Swap
+                            </button>
+                            {publicKey && (
+                                <button
+                                    onClick={fetchBalances}
+                                    disabled={isBalanceRefreshing}
+                                    title="Segarkan Saldo"
+                                    className="bg-[#18181B] text-[#c7c4d8] hover:text-white p-2.5 rounded-full border border-white/10 transition-colors flex items-center justify-center cursor-pointer disabled:opacity-50"
+                                >
+                                    <span className={`material-symbols-outlined text-[18px] ${isBalanceRefreshing ? 'animate-spin' : ''}`}>sync</span>
+                                </button>
+                            )}
+                        </div>
+
+                        {/* DUAL BALANCE OVERVIEW: SALDO E-WALLET & SALDO PRIVATE POOL */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-xl">
+                            {/* CARD 1: SALDO E-WALLET */}
+                            <div className="rounded-xl border border-white/10 bg-[#18181B]/80 backdrop-blur-md p-4 shadow-lg flex flex-col justify-between hover:border-white/20 transition-colors">
+                                <div>
+                                    <div className="flex items-center justify-between text-xs font-mono uppercase tracking-[0.12em] text-[#8f8d99]">
+                                        <span className="flex items-center gap-1.5">
+                                            <span className="material-symbols-outlined text-[16px] text-[#c3c0ff]">account_balance_wallet</span>
+                                            Saldo E-Wallet
+                                        </span>
+                                        <span className="flex items-center gap-1 text-[10px] text-amber-400 font-medium">
+                                            <span className="h-1.5 w-1.5 rounded-full bg-amber-400"></span>
+                                            Solana
+                                        </span>
+                                    </div>
+                                    <div className="mt-3">
+                                        <p className="text-2xl font-bold text-[#e5e1e4] font-mono">
+                                            {publicKey ? (balance !== null ? `${balance} SOL` : 'Loading...') : '0.0000 SOL'}
+                                        </p>
+                                        <p className="mt-0.5 text-xs text-[#8f8d99] font-mono">
+                                            {publicKey && balance && payTokenPrice ? `≈ $${(parseFloat(balance) * payTokenPrice).toFixed(2)} USD` : 'Connected Wallet'}
+                                        </p>
+                                    </div>
+                                </div>
+                                <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between text-[11px] font-mono text-[#a9a5c9]">
+                                    <span className="truncate max-w-[130px]">
+                                        {publicKey ? `${walletAddress.slice(0, 4)}...${walletAddress.slice(-4)}` : 'Belum Terhubung'}
+                                    </span>
+                                    <button
+                                        onClick={handleTopUp}
+                                        className="text-[#c3c0ff] hover:underline flex items-center gap-1 cursor-pointer"
+                                    >
+                                        <span className="material-symbols-outlined text-[14px]">qr_code</span>
+                                        Receive
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* CARD 2: SALDO PRIVATE POOL (VAULT) */}
+                            <div className="rounded-xl border border-[#c3c0ff]/30 bg-[#18181B]/80 backdrop-blur-md p-4 shadow-lg flex flex-col justify-between hover:border-[#c3c0ff]/50 transition-colors relative overflow-hidden">
+                                <div className="absolute top-0 right-0 w-24 h-24 bg-[#4f46e5]/10 rounded-full blur-xl pointer-events-none" />
+                                <div>
+                                    <div className="flex items-center justify-between text-xs font-mono uppercase tracking-[0.12em] text-[#a9a5c9]">
+                                        <span className="flex items-center gap-1.5">
+                                            <span className="material-symbols-outlined text-[16px] text-emerald-400">shield</span>
+                                            Saldo Private Pool
+                                        </span>
+                                        <span className="flex items-center gap-1 text-[10px] text-emerald-300 font-medium">
+                                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
+                                            On-chain Vault
+                                        </span>
+                                    </div>
+                                    <div className="mt-3">
+                                        <p className="text-2xl font-bold text-[#e5e1e4] font-mono">
+                                            {publicKey ? (privatePoolBalance !== null ? `${privatePoolBalance} SOL` : 'Loading...') : '0.000000 SOL'}
+                                        </p>
+                                        <p className="mt-0.5 text-xs text-[#8f8d99] font-mono">
+                                            {publicKey && privatePoolBalance && payTokenPrice ? `≈ $${(parseFloat(privatePoolBalance) * payTokenPrice).toFixed(2)} USD` : 'Private Pool Vault'}
+                                        </p>
+                                    </div>
+                                </div>
+                                <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between text-[11px] font-mono text-[#a9a5c9]">
+                                    <span className="text-emerald-400/90 flex items-center gap-1">
+                                        <span className="material-symbols-outlined text-[14px]">lock</span>
+                                        Protected
+                                    </span>
+                                    <button
+                                        onClick={() => setActiveTab('deposit')}
+                                        className="text-[#c3c0ff] hover:underline flex items-center gap-1 cursor-pointer"
+                                    >
+                                        <span className="material-symbols-outlined text-[14px]">add</span>
+                                        Top Up
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
-                    {/* Terminal Card Dynamic Area */}
                     <div className="bg-[#18181B]/60 backdrop-blur-md border border-white/10 rounded-xl p-6 relative overflow-visible group shadow-lg min-h-[400px]">
                         <div className="flex justify-between items-center mb-4 border-b border-white/5 pb-4">
                             <h2 className="text-2xl font-semibold text-[#e5e1e4] capitalize">{activeTab}</h2>
                             <span className="text-xs text-gray-400 font-mono bg-[#201f22] px-2 py-1 rounded">Private Mode</span>
                         </div>
 
-                        {/* SWAP TAB */}
                         {activeTab === 'swap' && (
                             <>
                                 <div className="flex items-center justify-between mb-4">
@@ -696,9 +854,13 @@ function UtilifyApp() {
                                 </div>
                                 <div className="space-y-2 relative">
                                     <div className="bg-[#09090B] border border-white/10 rounded-xl p-4 focus-within:border-[#c3c0ff] transition-colors">
-                                        <div className="flex justify-between text-[#8f8d99] text-xs font-mono mb-3">
+                                        <div className="flex flex-col sm:flex-row sm:justify-between text-[#8f8d99] text-xs font-mono mb-3 gap-1">
                                             <span>Pay</span>
-                                            <span>Balance: {publicKey ? (balance !== null ? `${balance} SOL` : 'Loading...') : '0.00 SOL'}</span>
+                                            <div className="flex items-center gap-2 text-[11px]">
+                                                <span>Wallet: <strong className="text-[#e5e1e4]">{publicKey ? (balance !== null ? `${balance} SOL` : '...') : '0.00'}</strong></span>
+                                                <span className="text-white/20">•</span>
+                                                <span>Pool: <strong className="text-[#c3c0ff]">{publicKey ? (privatePoolBalance !== null ? `${privatePoolBalance} SOL` : '...') : '0.00'}</strong></span>
+                                            </div>
                                         </div>
                                         <div className="flex justify-between items-center gap-4">
                                             <input
@@ -766,45 +928,88 @@ function UtilifyApp() {
                             </>
                         )}
 
-                        {/* DEPOSIT TAB */}
                         {activeTab === 'deposit' && (
                             <div className="space-y-4">
-                                <div className="bg-[#09090B] p-4 rounded border border-white/10">
-                                    <label className="text-xs text-gray-400">Amount to Deposit</label>
-                                    <div className="flex gap-2 mt-1">
+                                {/* Saldo Overview Box */}
+                                <div className="grid grid-cols-2 gap-3 p-3.5 rounded-xl bg-[#09090B] border border-white/10 text-xs font-mono">
+                                    <div>
+                                        <span className="text-[#8f8d99] block text-[10px] uppercase tracking-wider">Saldo E-Wallet (Sumber)</span>
+                                        <span className="text-[#e5e1e4] font-bold text-sm mt-0.5 block">
+                                            {publicKey ? (balance !== null ? `${balance} SOL` : 'Loading...') : '0.00 SOL'}
+                                        </span>
+                                    </div>
+                                    <div className="border-l border-white/10 pl-3.5">
+                                        <span className="text-[#a9a5c9] block text-[10px] uppercase tracking-wider flex items-center gap-1">
+                                            <span className="material-symbols-outlined text-[13px] text-emerald-400">shield</span>
+                                            Saldo Private Pool (Vault)
+                                        </span>
+                                        <span className="text-[#c3c0ff] font-bold text-sm mt-0.5 block">
+                                            {publicKey ? (privatePoolBalance !== null ? `${privatePoolBalance} SOL` : 'Loading...') : '0.000000 SOL'}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div className="bg-[#09090B] p-4 rounded-xl border border-white/10 focus-within:border-[#c3c0ff] transition-colors">
+                                    <div className="flex justify-between text-xs text-gray-400 font-mono mb-2">
+                                        <label htmlFor="deposit-amount-input">Jumlah Top Up ke Private Pool</label>
+                                        <span>Deposit to Vault</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
                                         <input
+                                            id="deposit-amount-input"
                                             type="number"
+                                            min="0"
                                             step="any"
                                             value={depositAmount}
                                             onChange={(e) => setDepositAmount(e.target.value)}
-                                            className="bg-transparent text-lg outline-none w-full"
+                                            className="bg-transparent text-2xl font-bold text-[#e5e1e4] outline-none w-full font-mono"
                                             placeholder="0.0"
                                         />
-                                        <span className="text-sm text-gray-400 font-mono">SOL</span>
+                                        <span className="text-xs text-[#c3c0ff] font-mono font-bold bg-[#4f46e5]/20 px-2.5 py-1.5 rounded">SOL</span>
                                     </div>
+
+                                    {/* Quick Percentage Buttons */}
+                                    {publicKey && balance && parseFloat(balance) > 0 && (
+                                        <div className="flex gap-2 mt-3 pt-3 border-t border-white/5">
+                                            {[25, 50, 75, 100].map((pct) => (
+                                                <button
+                                                    key={pct}
+                                                    type="button"
+                                                    onClick={() => handleSetDepositPercentage(pct)}
+                                                    className="flex-1 py-1 rounded bg-[#18181B] hover:bg-[#201f22] text-[10px] font-mono text-[#c7c4d8] hover:text-[#c3c0ff] border border-white/5 transition-colors cursor-pointer"
+                                                >
+                                                    {pct === 100 ? 'MAX' : `${pct}%`}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
-                                <div className="text-xs text-gray-400 flex justify-between">
-                                    <span>Solana Wallet Balance</span>
-                                    <span>{publicKey ? (balance !== null ? `${balance} SOL` : 'Loading...') : '0.00 SOL'}</span>
-                                </div>
+
                                 <button
                                     onClick={handleDepositRequest}
-                                    disabled={isLoading}
-                                    className="w-full bg-[#4f46e5] text-white py-4 rounded text-sm font-mono hover:bg-[#4d44e3] transition-colors flex justify-center items-center gap-2 disabled:opacity-50 cursor-pointer font-bold"
+                                    disabled={isLoading || !depositAmount || parseFloat(depositAmount) <= 0}
+                                    className="w-full bg-[#4f46e5] text-white py-3.5 rounded-lg text-sm font-mono hover:bg-[#4d44e3] transition-colors flex justify-center items-center gap-2 disabled:opacity-50 cursor-pointer font-bold shadow-lg shadow-[#4f46e5]/20"
                                 >
+                                    <span className="material-symbols-outlined text-[18px]">lock</span>
                                     {isLoading ? 'Processing Deposit...' : 'Top Up Private Pool'}
                                 </button>
+
+                                <div className="relative flex py-1 items-center">
+                                    <div className="flex-grow border-t border-white/10"></div>
+                                    <span className="flex-shrink mx-3 text-[11px] text-gray-500 font-mono">atau</span>
+                                    <div className="flex-grow border-t border-white/10"></div>
+                                </div>
+
                                 <button
                                     onClick={handleTopUp}
-                                    className="w-full border border-[#c3c0ff]/30 bg-[#c3c0ff]/10 text-[#c3c0ff] py-3 rounded text-sm font-mono hover:bg-[#c3c0ff]/20 transition-colors flex justify-center items-center gap-2 cursor-pointer"
+                                    className="w-full border border-[#c3c0ff]/30 bg-[#c3c0ff]/10 text-[#c3c0ff] py-3 rounded-lg text-xs font-mono hover:bg-[#c3c0ff]/20 transition-colors flex justify-center items-center gap-2 cursor-pointer font-medium"
                                 >
                                     <span className="material-symbols-outlined text-[18px]">qr_code_2</span>
-                                    {publicKey ? 'Top Up Connected Wallet' : 'Connect Wallet to Top Up'}
+                                    {publicKey ? 'Top Up Saldo E-Wallet (QR Code)' : 'Connect Wallet to Top Up'}
                                 </button>
-                                {topUpMessage && <p className="text-xs text-[#c3c0ff] font-mono">{topUpMessage}</p>}
+                                {topUpMessage && <p className="text-xs text-center text-[#c3c0ff] font-mono">{topUpMessage}</p>}
                             </div>
                         )}
-
                     </div>
                 </section>
             </main>
@@ -823,7 +1028,7 @@ function UtilifyApp() {
                         <div className="flex items-start justify-between">
                             <div>
                                 <p className="text-xs font-mono uppercase tracking-[0.18em] text-[#8f8d99]">Solana Top Up</p>
-                                <h2 className="mt-1 text-2xl font-semibold text-[#e5e1e4]">Review deposit</h2>
+                                <h2 className="mt-1 text-2xl font-semibold text-[#e5e1e4]">Review Deposit</h2>
                             </div>
                             <button
                                 onClick={() => setIsDepositConfirmOpen(false)}
@@ -840,17 +1045,27 @@ function UtilifyApp() {
                                 <span className="font-mono text-[#e5e1e4]">{wallet?.adapter?.name || 'Solana Wallet'}</span>
                             </div>
                             <div className="flex justify-between text-sm text-[#c7c4d8]">
-                                <span>Available balance</span>
+                                <span>Saldo E-Wallet Saat Ini</span>
                                 <span className="font-mono text-[#e5e1e4]">{balance !== null ? `${balance} SOL` : 'Loading...'}</span>
                             </div>
+                            <div className="flex justify-between text-sm text-[#c7c4d8]">
+                                <span>Saldo Private Pool Saat Ini</span>
+                                <span className="font-mono text-emerald-400">{privatePoolBalance !== null ? `${privatePoolBalance} SOL` : '0.000000 SOL'}</span>
+                            </div>
                             <div className="border-t border-white/10 pt-3 flex justify-between text-base font-semibold text-[#e5e1e4]">
-                                <span>Top up amount</span>
+                                <span>Jumlah Top Up</span>
                                 <span className="font-mono text-[#c3c0ff]">{Number.parseFloat(depositAmount).toFixed(6)} SOL</span>
+                            </div>
+                            <div className="flex justify-between text-xs text-[#8f8d99] font-mono">
+                                <span>Estimasi Saldo Pool Baru</span>
+                                <span className="text-emerald-300 font-semibold">
+                                    {((Number.parseFloat(privatePoolBalance || '0') || 0) + (Number.parseFloat(depositAmount || '0') || 0)).toFixed(6)} SOL
+                                </span>
                             </div>
                         </div>
 
                         <p className="mt-4 text-sm leading-6 text-[#c7c4d8]">
-                            Solflare akan membuka pop-up untuk meminta persetujuan transaksi. Dana akan dikirim ke vault private pool setelah Anda menyetujuinya.
+                            Solflare akan membuka pop-up untuk meminta persetujuan transaksi. Dana akan dikirim ke vault Private Pool setelah Anda menyetujuinya.
                         </p>
 
                         <div className="mt-6 flex gap-3">
@@ -863,7 +1078,7 @@ function UtilifyApp() {
                             <button
                                 onClick={handleDeposit}
                                 disabled={isLoading}
-                                className="flex-1 rounded-lg bg-[#4f46e5] py-3 text-xs font-mono text-white transition-colors hover:bg-[#4d44e3] disabled:opacity-50 cursor-pointer"
+                                className="flex-1 rounded-lg bg-[#4f46e5] py-3 text-xs font-mono text-white transition-colors hover:bg-[#4d44e3] disabled:opacity-50 cursor-pointer font-bold"
                             >
                                 Lanjutkan di Solflare
                             </button>
@@ -932,9 +1147,8 @@ function UtilifyApp() {
     );
 }
 
-// --- WRAPPER UTAMA ---
 export default function Welcome() {
-    const endpoint = useMemo(() => import.meta.env.VITE_SOLANA_RPC_URL || 'https://api.devnet.solana.com', []);
+    const endpoint = useMemo(() => DEVNET_RPC, []);
     const wallets = useMemo(() => [new SolflareWalletAdapter({ network: WalletAdapterNetwork.Devnet })], []);
 
     return (

@@ -9,8 +9,11 @@ skip-lint = false
 [programs.devnet]
 user_vault = "5fFzormXushFBX8s5fkUo49AN4G6ZxjJCqH1KSr6o9mb"
 
+[programs.mainnet]
+user_vault = "5fFzormXushFBX8s5fkUo49AN4G6ZxjJCqH1KSr6o9mb"
+
 [provider]
-cluster = "devnet"
+cluster = "Mainnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]
