@@ -84,8 +84,116 @@ const TOKEN_COLORS = {
     ZEC: 'bg-[#f4b728] text-[#2a1b00]',
 };
 
-// ─── DEVNET RPC ─────────────────────────────────────────────────────────────
-const DEVNET_RPC = import.meta.env.VITE_SOLANA_RPC_URL || 'https://api.devnet.solana.com';
+// ─── SOLANA NETWORKS CONFIGURATION ──────────────────────────────────────────
+const SOLANA_NETWORKS = {
+    devnet: {
+        id: 'devnet',
+        name: 'Solana Devnet',
+        shortName: 'Devnet',
+        network: WalletAdapterNetwork.Devnet,
+        endpoint: import.meta.env.VITE_SOLANA_DEVNET_RPC || import.meta.env.VITE_SOLANA_RPC_URL || 'https://api.devnet.solana.com',
+        color: 'bg-amber-400',
+        textColor: 'text-amber-400',
+        borderColor: 'border-amber-400/30',
+        badgeBg: 'bg-amber-400/10',
+    },
+    testnet: {
+        id: 'testnet',
+        name: 'Solana Testnet',
+        shortName: 'Testnet',
+        network: WalletAdapterNetwork.Testnet,
+        endpoint: import.meta.env.VITE_SOLANA_TESTNET_RPC || 'https://api.testnet.solana.com',
+        color: 'bg-indigo-400',
+        textColor: 'text-indigo-400',
+        borderColor: 'border-indigo-400/30',
+        badgeBg: 'bg-indigo-400/10',
+    },
+    mainnet: {
+        id: 'mainnet',
+        name: 'Solana Mainnet',
+        shortName: 'Mainnet',
+        network: WalletAdapterNetwork.Mainnet,
+        endpoint: import.meta.env.VITE_SOLANA_MAINNET_RPC || 'https://api.mainnet-beta.solana.com',
+        color: 'bg-emerald-400',
+        textColor: 'text-emerald-400',
+        borderColor: 'border-emerald-400/30',
+        badgeBg: 'bg-emerald-400/10',
+    },
+};
+
+const DEFAULT_NETWORK_KEY = (() => {
+    const rpc = (import.meta.env.VITE_SOLANA_RPC_URL || '').toLowerCase();
+    if (rpc.includes('mainnet')) return 'mainnet';
+    if (rpc.includes('testnet')) return 'testnet';
+    return 'devnet';
+})();
+
+function NetworkBadge({ activeNetwork, onSelectNetwork }) {
+    const [isOpen, setIsOpen] = useState(false);
+    const dropdownRef = useRef(null);
+    const current = SOLANA_NETWORKS[activeNetwork] || SOLANA_NETWORKS.devnet;
+
+    useEffect(() => {
+        const handleOutsideClick = (event) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleOutsideClick);
+        return () => document.removeEventListener('mousedown', handleOutsideClick);
+    }, []);
+
+    return (
+        <div ref={dropdownRef} className="relative hidden lg:block">
+            <button
+                type="button"
+                onClick={() => setIsOpen((prev) => !prev)}
+                className="flex items-center gap-2 bg-[#201f22] hover:bg-[#2a2a2c] px-3 py-1.5 rounded-full border border-white/10 text-xs font-medium text-[#e5e1e4] font-mono transition-colors cursor-pointer"
+                title="Ganti Jaringan Solana (Devnet / Testnet / Mainnet)"
+                aria-haspopup="listbox"
+                aria-expanded={isOpen}
+            >
+                <span className={`w-2 h-2 rounded-full ${current.color} animate-pulse`}></span>
+                <span>{current.name}</span>
+                <span className="material-symbols-outlined text-[16px] text-gray-400">expand_more</span>
+            </button>
+
+            {isOpen && (
+                <div className="absolute right-0 top-full mt-2 w-48 rounded-xl border border-white/10 bg-[#18181B] p-1.5 shadow-2xl z-50">
+                    <div className="px-2 pb-1 pt-1.5 text-[10px] uppercase tracking-[0.16em] text-[#8f8d99] font-mono">
+                        Pilih Jaringan
+                    </div>
+                    {Object.entries(SOLANA_NETWORKS).map(([key, net]) => {
+                        const isSelected = activeNetwork === key;
+                        return (
+                            <button
+                                key={key}
+                                type="button"
+                                onClick={() => {
+                                    onSelectNetwork(key);
+                                    setIsOpen(false);
+                                }}
+                                className={`flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-mono transition-colors cursor-pointer ${
+                                    isSelected ? 'bg-[#4f46e5]/30 text-[#c3c0ff] font-bold' : 'text-[#e5e1e4] hover:bg-white/10'
+                                }`}
+                                role="option"
+                                aria-selected={isSelected}
+                            >
+                                <div className="flex items-center gap-2">
+                                    <span className={`w-2 h-2 rounded-full ${net.color}`}></span>
+                                    <span>{net.name}</span>
+                                </div>
+                                {isSelected && (
+                                    <span className="material-symbols-outlined text-[16px] text-[#c3c0ff]">check</span>
+                                )}
+                            </button>
+                        );
+                    })}
+                </div>
+            )}
+        </div>
+    );
+}
 
 function TokenLogo({ token, size = 'h-7 w-7' }) {
     return (
@@ -250,13 +358,15 @@ function CustomWalletButton() {
     );
 }
 
-function UtilifyApp() {
+function UtilifyApp({ activeNetwork, onSelectNetwork }) {
     const { publicKey, wallet, sendTransaction } = useWallet();
     const { connection } = useConnection();
 
+    const currentNetworkConfig = SOLANA_NETWORKS[activeNetwork] || SOLANA_NETWORKS.devnet;
+
     const vaultConnection = useMemo(
-        () => new Connection(DEVNET_RPC, 'confirmed'),
-        []
+        () => new Connection(currentNetworkConfig.endpoint, 'confirmed'),
+        [currentNetworkConfig.endpoint]
     );
 
     const { setVisible } = useWalletModal();
@@ -704,10 +814,7 @@ function UtilifyApp() {
                             </div>
                         )}
 
-                        <div className="hidden lg:flex items-center gap-2 bg-[#201f22] px-3 py-1.5 rounded-full border border-white/10">
-                            <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
-                            <span className="text-xs font-medium text-[#e5e1e4] font-mono">Solana Devnet</span>
-                        </div>
+                        <NetworkBadge activeNetwork={activeNetwork} onSelectNetwork={onSelectNetwork} />
 
                         <CustomWalletButton />
                     </div>
@@ -1148,14 +1255,38 @@ function UtilifyApp() {
 }
 
 export default function Welcome() {
-    const endpoint = useMemo(() => DEVNET_RPC, []);
-    const wallets = useMemo(() => [new SolflareWalletAdapter({ network: WalletAdapterNetwork.Devnet })], []);
+    const [activeNetwork, setActiveNetwork] = useState(() => {
+        try {
+            const stored = window.localStorage.getItem('solana-active-network');
+            if (stored && SOLANA_NETWORKS[stored]) return stored;
+        } catch (error) {
+            console.warn('Gagal membaca jaringan Solana tersimpan:', error);
+        }
+        return DEFAULT_NETWORK_KEY;
+    });
+
+    const networkConfig = SOLANA_NETWORKS[activeNetwork] || SOLANA_NETWORKS.devnet;
+    const endpoint = useMemo(() => networkConfig.endpoint, [networkConfig.endpoint]);
+    const wallets = useMemo(
+        () => [new SolflareWalletAdapter({ network: networkConfig.network })],
+        [networkConfig.network]
+    );
+
+    const handleSelectNetwork = useCallback((networkKey) => {
+        if (!SOLANA_NETWORKS[networkKey]) return;
+        setActiveNetwork(networkKey);
+        try {
+            window.localStorage.setItem('solana-active-network', networkKey);
+        } catch (error) {
+            console.warn('Gagal menyimpan jaringan Solana:', error);
+        }
+    }, []);
 
     return (
-        <ConnectionProvider endpoint={endpoint}>
+        <ConnectionProvider key={activeNetwork} endpoint={endpoint}>
             <WalletProvider wallets={wallets} autoConnect={true}>
                 <WalletModalProvider>
-                    <UtilifyApp />
+                    <UtilifyApp activeNetwork={activeNetwork} onSelectNetwork={handleSelectNetwork} />
                 </WalletModalProvider>
             </WalletProvider>
         </ConnectionProvider>
