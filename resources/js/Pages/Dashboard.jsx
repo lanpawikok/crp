@@ -435,7 +435,7 @@ function UtilifyApp({ activeNetwork, onSelectNetwork }) {
             const depositedLamports = isVault ? decodeU64(accountInfo.data.subarray(40, 48)) : 0n;
             setPrivatePoolBalance((Number(depositedLamports) / LAMPORTS_PER_SOL).toFixed(6));
         } catch (error) {
-            console.error('Gagal mengambil saldo Private Pool:', error);
+            console.error('Failed To Take Private Pool Balance:', error);
             setPrivatePoolBalance(null);
         }
 
@@ -801,12 +801,12 @@ function UtilifyApp({ activeNetwork, onSelectNetwork }) {
 
                         {publicKey && (
                             <div className="hidden xl:flex items-center gap-3 bg-[#18181B] border border-white/10 rounded-full px-3.5 py-1.5 text-xs font-mono">
-                                <div className="flex items-center gap-1.5" title="Saldo E-Wallet Anda">
+                                <div className="flex items-center gap-1.5" title="Your E-Wallet Balance">
                                     <span className="text-[#8f8d99]">Wallet:</span>
                                     <span className="text-[#e5e1e4] font-medium">{balance !== null ? `${balance} SOL` : '...'}</span>
                                 </div>
                                 <span className="text-white/20">|</span>
-                                <div className="flex items-center gap-1.5" title="Saldo Private Pool Vault Anda">
+                                <div className="flex items-center gap-1.5" title="Your Private Pool Balance Vault ">
                                     <span className="text-[#a9a5c9] flex items-center gap-1">
                                         <span className="material-symbols-outlined text-[14px] text-emerald-400">shield</span>
                                         Pool:
@@ -869,7 +869,7 @@ function UtilifyApp({ activeNetwork, onSelectNetwork }) {
                                     <div className="flex items-center justify-between text-xs font-mono uppercase tracking-[0.12em] text-[#8f8d99]">
                                         <span className="flex items-center gap-1.5">
                                             <span className="material-symbols-outlined text-[16px] text-[#c3c0ff]">account_balance_wallet</span>
-                                            Saldo E-Wallet
+                                             E-Wallet Balance
                                         </span>
                                         <span className="flex items-center gap-1 text-[10px] text-amber-400 font-medium">
                                             <span className="h-1.5 w-1.5 rounded-full bg-amber-400"></span>
@@ -906,7 +906,7 @@ function UtilifyApp({ activeNetwork, onSelectNetwork }) {
                                     <div className="flex items-center justify-between text-xs font-mono uppercase tracking-[0.12em] text-[#a9a5c9]">
                                         <span className="flex items-center gap-1.5">
                                             <span className="material-symbols-outlined text-[16px] text-emerald-400">shield</span>
-                                            Saldo Private Pool
+                                             Private Pool Balance
                                         </span>
                                         <span className="flex items-center gap-1 text-[10px] text-emerald-300 font-medium">
                                             <span className="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
@@ -1060,7 +1060,7 @@ function UtilifyApp({ activeNetwork, onSelectNetwork }) {
 
                                 <div className="bg-[#09090B] p-4 rounded-xl border border-white/10 focus-within:border-[#c3c0ff] transition-colors">
                                     <div className="flex justify-between text-xs text-gray-400 font-mono mb-2">
-                                        <label htmlFor="deposit-amount-input">Jumlah Top Up ke Private Pool</label>
+                                        <label htmlFor="deposit-amount-input"> Top Up Amount To Private Pool</label>
                                         <span>Deposit to Vault</span>
                                     </div>
                                     <div className="flex items-center gap-2">
@@ -1114,7 +1114,7 @@ function UtilifyApp({ activeNetwork, onSelectNetwork }) {
                                     className="w-full border border-[#c3c0ff]/30 bg-[#c3c0ff]/10 text-[#c3c0ff] py-3 rounded-lg text-xs font-mono hover:bg-[#c3c0ff]/20 transition-colors flex justify-center items-center gap-2 cursor-pointer font-medium"
                                 >
                                     <span className="material-symbols-outlined text-[18px]">qr_code_2</span>
-                                    {publicKey ? 'Top Up Saldo E-Wallet (QR Code)' : 'Connect Wallet to Top Up'}
+                                    {publicKey ? 'Top Up E-Wallet Balance (QR Code)' : 'Connect Wallet to Top Up'}
                                 </button>
                                 {topUpMessage && <p className="text-xs text-center text-[#c3c0ff] font-mono">{topUpMessage}</p>}
                             </div>
@@ -1154,15 +1154,15 @@ function UtilifyApp({ activeNetwork, onSelectNetwork }) {
                                 <span className="font-mono text-[#e5e1e4]">{wallet?.adapter?.name || 'Solana Wallet'}</span>
                             </div>
                             <div className="flex justify-between text-sm text-[#c7c4d8]">
-                                <span>Saldo E-Wallet Saat Ini</span>
+                                <span> E-Wallet Balance This Time</span>
                                 <span className="font-mono text-[#e5e1e4]">{balance !== null ? `${balance} SOL` : 'Loading...'}</span>
                             </div>
                             <div className="flex justify-between text-sm text-[#c7c4d8]">
-                                <span>Saldo Private Pool Saat Ini</span>
+                                <span>Private Pool Balance This Time</span>
                                 <span className="font-mono text-emerald-400">{privatePoolBalance !== null ? `${privatePoolBalance} SOL` : '0.000000 SOL'}</span>
                             </div>
                             <div className="border-t border-white/10 pt-3 flex justify-between text-base font-semibold text-[#e5e1e4]">
-                                <span>Jumlah Top Up</span>
+                                <span> Top Up Amount</span>
                                 <span className="font-mono text-[#c3c0ff]">{Number.parseFloat(depositAmount).toFixed(6)} SOL</span>
                             </div>
                             <div className="flex justify-between text-xs text-[#8f8d99] font-mono">
