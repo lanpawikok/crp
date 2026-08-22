@@ -138,6 +138,7 @@ const DEFAULT_NETWORK_KEY = (() => {
 
 function NetworkBadge({ activeNetwork, onSelectNetwork }) {
     const [isOpen, setIsOpen] = useState(false);
+    const [menuPosition, setMenuPosition] = useState({ top: 0, right: 0 });
     const dropdownRef = useRef(null);
     const current = SOLANA_NETWORKS[activeNetwork] || SOLANA_NETWORKS.devnet;
 
@@ -151,11 +152,24 @@ function NetworkBadge({ activeNetwork, onSelectNetwork }) {
         return () => document.removeEventListener('mousedown', handleOutsideClick);
     }, []);
 
+    // Position the menu using fixed coordinates so it is never clipped
+    // by the horizontally scrollable header on mobile.
+    const toggleMenu = () => {
+        if (!isOpen && dropdownRef.current) {
+            const rect = dropdownRef.current.getBoundingClientRect();
+            setMenuPosition({
+                top: rect.bottom + 8,
+                right: Math.max(8, window.innerWidth - rect.right),
+            });
+        }
+        setIsOpen((prev) => !prev);
+    };
+
     return (
-        <div ref={dropdownRef} className="relative">
+        <div ref={dropdownRef} className="relative shrink-0">
             <button
                 type="button"
-                onClick={() => setIsOpen((prev) => !prev)}
+                onClick={toggleMenu}
                 className="flex items-center gap-1.5 sm:gap-2 bg-[#201f22] hover:bg-[#2a2a2c] px-2 py-1 sm:px-3 sm:py-1.5 rounded-full border border-white/10 text-xs font-medium text-[#e5e1e4] font-mono transition-colors cursor-pointer"
                 title="Switch Solana Network (Devnet / Testnet / Mainnet)"
                 aria-haspopup="listbox"
@@ -168,7 +182,10 @@ function NetworkBadge({ activeNetwork, onSelectNetwork }) {
             </button>
 
             {isOpen && (
-                <div className="absolute right-0 top-full mt-2 w-48 rounded-xl border border-white/10 bg-[#18181B] p-1.5 shadow-2xl z-50">
+                <div
+                    className="fixed w-48 rounded-xl border border-white/10 bg-[#18181B] p-1.5 shadow-2xl z-[70]"
+                    style={{ top: `${menuPosition.top}px`, right: `${menuPosition.right}px` }}
+                >
                     <div className="px-2 pb-1 pt-1.5 text-[10px] uppercase tracking-[0.16em] text-[#8f8d99] font-mono">
                         Select Network
                     </div>
@@ -843,26 +860,30 @@ function UtilifyApp({ activeNetwork, onSelectNetwork }) {
             />
 
             <nav className="fixed top-0 w-full z-50 bg-[#18181B]/80 backdrop-blur-xl border-b border-white/10 shadow-sm">
-                <div className="flex justify-between items-center h-14 sm:h-16 px-4 sm:px-6 md:px-10 max-w-[1280px] mx-auto">
-                    <div className="text-lg sm:text-2xl font-bold tracking-tighter text-[#c3c0ff] shrink-0">No Trace</div>
+                <div className="flex items-center h-14 sm:h-16 px-4 sm:px-6 md:px-10 max-w-[1280px] mx-auto">
+                    {/* Fixed logo — stays in place, never scrolls */}
+                    <div className="shrink-0 text-lg sm:text-2xl font-bold tracking-tighter text-[#c3c0ff]">No Trace</div>
 
-                    <div className="flex space-x-1 sm:space-x-6 text-sm sm:text-base">
-                        {['swap', 'deposit'].map((tab) => (
-                            <button
-                                key={tab}
-                                onClick={() => setActiveTab(tab)}
-                                className={`px-2 py-1 sm:px-3 rounded transition-colors cursor-pointer capitalize ${
-                                    activeTab === tab
-                                        ? 'text-[#c3c0ff] border-b-2 border-[#c3c0ff] font-medium'
-                                        : 'text-[#c7c4d8] hover:text-white'
-                                }`}
-                            >
-                                {tab}
-                            </button>
-                        ))}
-                    </div>
+                    {/* Scrollable header area — swipe left/right on mobile */}
+                    <div className="flex-1 min-w-0 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ml-3 sm:ml-6">
+                        <div className="flex items-center justify-between gap-2 sm:gap-3 md:gap-4 w-max min-w-full py-1 pr-1">
+                            <div className="flex space-x-1 sm:space-x-6 text-sm sm:text-base shrink-0">
+                                {['swap', 'deposit'].map((tab) => (
+                                    <button
+                                        key={tab}
+                                        onClick={() => setActiveTab(tab)}
+                                        className={`px-2 py-1 sm:px-3 rounded transition-colors cursor-pointer capitalize ${
+                                            activeTab === tab
+                                                ? 'text-[#c3c0ff] border-b-2 border-[#c3c0ff] font-medium'
+                                                : 'text-[#c7c4d8] hover:text-white'
+                                        }`}
+                                    >
+                                        {tab}
+                                    </button>
+                                ))}
+                            </div>
 
-                    <div className="flex items-center gap-2 sm:gap-3 md:gap-4">
+                            <div className="flex items-center gap-2 sm:gap-3 md:gap-4 shrink-0 pl-2">
                         {auth?.user && (
                             <div className="flex items-center gap-3">
                                 {auth.user.email === 'admin@notracefi.test' && (
@@ -904,9 +925,11 @@ function UtilifyApp({ activeNetwork, onSelectNetwork }) {
                             </div>
                         )}
 
-                        <NetworkBadge activeNetwork={activeNetwork} onSelectNetwork={onSelectNetwork} />
+                            <NetworkBadge activeNetwork={activeNetwork} onSelectNetwork={onSelectNetwork} />
 
-                        <CustomWalletButton />
+                            <CustomWalletButton />
+                            </div>
+                        </div>
                     </div>
                 </div>
             </nav>
