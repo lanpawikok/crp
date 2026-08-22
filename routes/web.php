@@ -9,8 +9,13 @@ use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
-// 1. MAIN PAGE (Redirect to Login / Register)
-Route::redirect('/', '/register');
+// 1. LANDING PAGE (first visit) — guests see the landing page,
+// logged-in users go straight to the dashboard.
+Route::get('/', function () {
+    return auth()->check()
+        ? redirect()->route('dashboard')
+        : Inertia::render('LandingPage');
+})->name('landing');
 
 // 2. REGULAR USER DASHBOARD ROUTE (Requires login & verified)
 Route::get('/dashboard', function () {
