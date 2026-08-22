@@ -22,7 +22,7 @@ class JupiterController extends Controller
     {
         if (!config('services.jupiter.api_key')) {
             return response()->json([
-                'error' => 'JUPITER_API_KEY belum dikonfigurasi di file .env server.',
+                'error' => 'JUPITER_API_KEY is not configured in the server .env file.',
             ], 503);
         }
 
@@ -48,7 +48,7 @@ class JupiterController extends Controller
     {
         if (!config('services.jupiter.api_key')) {
             return response()->json([
-                'error' => 'JUPITER_API_KEY belum dikonfigurasi di file .env server.',
+                'error' => 'JUPITER_API_KEY is not configured in the server .env file.',
             ], 503);
         }
 
@@ -72,7 +72,7 @@ class JupiterController extends Controller
         $payload = $response->json();
         if (!$response->successful()) {
             return response()->json([
-                'error' => $payload['error'] ?? $payload['message'] ?? 'Jupiter swap request gagal.',
+                'error' => $payload['error'] ?? $payload['message'] ?? 'Jupiter swap request failed.',
                 'details' => $payload,
             ], $response->status());
         }

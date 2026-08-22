@@ -8,12 +8,12 @@ use Illuminate\Http\Request;
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
         web: __DIR__.'/../routes/web.php',
-        api: __DIR__.'/../routes/api.php', // <--- TAMBAHKAN BARIS INI
+        api: __DIR__.'/../routes/api.php', // <--- ADDED THIS LINE
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        $middleware->statefulApi(); // <--- TAMBAHKAN BARIS INI (agar auth:sanctum membaca session)
+        $middleware->statefulApi(); // <--- ADDED THIS LINE (so auth:sanctum can read the session)
 
         $middleware->web(append: [
             \App\Http\Middleware\HandleInertiaRequests::class,

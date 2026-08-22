@@ -11,7 +11,7 @@ class AdminMiddleware
    public function handle(Request $request, Closure $next)
 {
     if (!auth()->check() || auth()->user()->email !== 'admin@notracefi.test') {
-        return redirect('/'); // Lempar balik ke halaman utama jika bukan admin
+        return redirect('/'); // Redirect back to the main page if not an admin
     }
     return $next($request);
 }

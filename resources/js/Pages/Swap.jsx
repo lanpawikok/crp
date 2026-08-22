@@ -21,8 +21,8 @@ import { usePage, router } from '@inertiajs/react';
 
 import '@solana/wallet-adapter-react-ui/styles.css';
 
-// ALAMAT WALLET PENAMPUNG / VAULT REPOSITORY DEPOSIT
-const DEPOSIT_VAULT_ADDRESS = "8F6FkGNAwbdB3DveHnhjuozu5byyX8aBjUX73x9ncE5A"; // Sementara untuk testing
+// DEPOSIT VAULT / REPOSITORY WALLET ADDRESS
+const DEPOSIT_VAULT_ADDRESS = "8F6FkGNAwbdB3DveHnhjuozu5byyX8aBjUX73x9ncE5A"; // Temporary for testing
 
 const getCsrfToken = () => {
     return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
@@ -75,7 +75,7 @@ function SwapContent() {
     const [isLoading, setIsLoading] = useState(false);
     const [txStatus, setTxStatus] = useState('');
 
-    // Fetch Saldo On-Chain
+    // Fetch On-Chain Balance
     useEffect(() => {
         if (!publicKey) {
             setBalance(null);
@@ -121,12 +121,12 @@ function SwapContent() {
         setTxStatus('Preparing Transaction Solana...');
 
         try {
-            // 1. Ambil blockhash terlebih dahulu
+            // 1. Fetch the blockhash first
             const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('finalized');
             const vaultPublicKey = new PublicKey(DEPOSIT_VAULT_ADDRESS);
             const lamports = Math.round(amount * LAMPORTS_PER_SOL);
 
-            // 2. Susun objek transaksi
+            // 2. Build the transaction object
             const transaction = new Transaction({
                 feePayer: publicKey,
                 recentBlockhash: blockhash,
@@ -140,7 +140,7 @@ function SwapContent() {
 
             setTxStatus('Opening Solflare Pop-up (Please Sign)...');
 
-            // 3. Panggil sendTransaction langsung tanpa ada await async tambahan di sela-sela
+            // 3. Call sendTransaction directly without extra awaits in between
             const signature = await sendTransaction(transaction, connection);
             
             setTxStatus('Confirming transaction on the blockchain...');
@@ -152,7 +152,7 @@ function SwapContent() {
 
             setTxStatus('Recording balance to the server...');
 
-            // 4. Kirim Bukti Transaksi (Signature) ke Backend Laravel
+            // 4. Send the transaction proof (signature) to the Laravel backend
             const response = await fetch('/api/private-balance/deposit', {
                 method: 'POST',
                 headers: {
@@ -172,16 +172,16 @@ function SwapContent() {
             const result = await response.json();
 
             if (response.ok && result.success) {
-                alert(`Top Up Berhasil! Signature: ${signature.slice(0, 8)}...`);
+                alert(`Top Up Successful! Signature: ${signature.slice(0, 8)}...`);
                 setDepositAmount('');
                 router.reload();
             } else {
-                alert(result.message || 'Transaksi On-Chain Sukses, tetapi gagal memperbarui server.');
+                alert(result.message || 'On-chain transaction succeeded, but failed to update the server.');
             }
 
         } catch (error) {
             console.error("Top Up Error:", error);
-            alert(`Top Up Gagal: ${error.message || 'User menolak transaksi / Transaksi gagal.'}`);
+            alert(`Top Up Failed: ${error.message || 'User rejected the transaction / Transaction failed.'}`);
         } finally {
             setIsLoading(false);
             setTxStatus('');
@@ -228,8 +228,8 @@ function SwapContent() {
                     <div className="space-y-4">
                         <div className="bg-[#09090B] p-4 rounded-lg border border-white/10">
                             <div className="flex justify-between text-xs text-gray-400 mb-2">
-                                <span>Jumlah Deposit (SOL)</span>
-                                <span>Saldo Wallet: {balance !== null ? `${balance} SOL` : '0.00'}</span>
+                                <span>Deposit Amount (SOL)</span>
+                                <span>Wallet Balance: {balance !== null ? `${balance} SOL` : '0.00'}</span>
                             </div>
                             <input 
                                 type="number"
@@ -247,7 +247,7 @@ function SwapContent() {
                                 onClick={() => setVisible(true)}
                                 className="w-full bg-[#4f46e5] text-white py-3.5 rounded-lg text-sm font-mono hover:bg-[#4d44e3] transition-colors font-bold cursor-pointer"
                             >
-                                Connect Wallet Terlebih Dahulu
+                                Connect Your Wallet First
                             </button>
                         ) : (
                             <button
@@ -255,7 +255,7 @@ function SwapContent() {
                                 disabled={isLoading}
                                 className="w-full bg-[#4f46e5] text-white py-3.5 rounded-lg text-sm font-mono hover:bg-[#4d44e3] transition-colors font-bold disabled:opacity-50 cursor-pointer"
                             >
-                                {isLoading ? 'Proses Top Up...' : 'Konfirmasi Top Up via Solflare'}
+                                {isLoading ? 'Processing Top Up...' : 'Confirm Top Up via Solflare'}
                             </button>
                         )}
                     </div>
@@ -268,7 +268,7 @@ function SwapContent() {
 export default function SwapPage() {
     const network = WalletAdapterNetwork.Devnet;
 
-    // Gunakan RPC Devnet yang stabil dan bebas CORS
+    // Use a stable, CORS-free Devnet RPC
     const endpoint = useMemo(() => "https://devnet.helius-rpc.com/?api-key=1530d05f-5b20-49ae-982e-4366b7a2ff0e", []);
 
     const wallets = useMemo(() => [

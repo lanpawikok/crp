@@ -43,10 +43,16 @@ const concatBytes = (...parts) => {
     return result;
 };
 
+// Only tokens with configured mint addresses so every pair is actually swappable.
 const FROM_TOKEN_GROUPS = [
     { label: 'Top', tokens: ['SOL', 'USDC', 'USDT'] },
     { label: 'Yield', tokens: ['stORE'] },
-    { label: 'Others', tokens: ['ORE', 'ZEC'] },
+];
+
+const SLIPPAGE_OPTIONS = [
+    { value: 10, label: '0.1%' },
+    { value: 50, label: '0.5%' },
+    { value: 100, label: '1%' },
 ];
 
 const TOKEN_MINTS = {
@@ -113,8 +119,8 @@ const SOLANA_NETWORKS = {
         name: 'Solana Mainnet',
         shortName: 'Mainnet',
         network: WalletAdapterNetwork.Mainnet,
-        // RPC publik mainnet (api.mainnet-beta.solana.com) memblokir request dari browser (403),
-        // jadi default-nya memakai PublicNode yang gratis, stabil, dan bebas CORS.
+        // The public mainnet RPC (api.mainnet-beta.solana.com) blocks browser requests (403),
+        // so the default uses PublicNode which is free, stable, and CORS-friendly.
         endpoint: import.meta.env.VITE_SOLANA_MAINNET_RPC || 'https://solana-rpc.publicnode.com',
         color: 'bg-emerald-400',
         textColor: 'text-emerald-400',
@@ -151,7 +157,7 @@ function NetworkBadge({ activeNetwork, onSelectNetwork }) {
                 type="button"
                 onClick={() => setIsOpen((prev) => !prev)}
                 className="flex items-center gap-2 bg-[#201f22] hover:bg-[#2a2a2c] px-3 py-1.5 rounded-full border border-white/10 text-xs font-medium text-[#e5e1e4] font-mono transition-colors cursor-pointer"
-                title="Ganti Jaringan Solana (Devnet / Testnet / Mainnet)"
+                title="Switch Solana Network (Devnet / Testnet / Mainnet)"
                 aria-haspopup="listbox"
                 aria-expanded={isOpen}
             >
@@ -163,7 +169,7 @@ function NetworkBadge({ activeNetwork, onSelectNetwork }) {
             {isOpen && (
                 <div className="absolute right-0 top-full mt-2 w-48 rounded-xl border border-white/10 bg-[#18181B] p-1.5 shadow-2xl z-50">
                     <div className="px-2 pb-1 pt-1.5 text-[10px] uppercase tracking-[0.16em] text-[#8f8d99] font-mono">
-                        Pilih Jaringan
+                        Select Network
                     </div>
                     {Object.entries(SOLANA_NETWORKS).map(([key, net]) => {
                         const isSelected = activeNetwork === key;
@@ -382,13 +388,20 @@ function UtilifyApp({ activeNetwork, onSelectNetwork }) {
     const [isLoading, setIsLoading] = useState(false);
 
     const [payAmount, setPayAmount] = useState('0.0');
-    const [receiveAmount, setReceiveAmount] = useState('0.0');
     const [payToken, setPayToken] = useState('SOL');
     const [receiveToken, setReceiveToken] = useState('USDC');
     const [swapStatus, setSwapStatus] = useState('');
     const [tokenPrices, setTokenPrices] = useState({});
-    const [isRateLoading, setIsRateLoading] = useState(false);
     const [transactionNotice, setTransactionNotice] = useState(null);
+
+    // Live Jupiter quote (like the Phantom trade page)
+    const [quote, setQuote] = useState(null);
+    const [quoteFetchedAt, setQuoteFetchedAt] = useState(0);
+    const [quoteError, setQuoteError] = useState(null);
+    const [isQuoting, setIsQuoting] = useState(false);
+    const [slippageBps, setSlippageBps] = useState(50);
+    const [isSlippageOpen, setIsSlippageOpen] = useState(false);
+    const quoteRequestRef = useRef(0);
 
     const [depositAmount, setDepositAmount] = useState('');
     const [isTopUpOpen, setIsTopUpOpen] = useState(false);
@@ -403,11 +416,28 @@ function UtilifyApp({ activeNetwork, onSelectNetwork }) {
 
     const payTokenPrice = tokenPrices[payToken];
     const receiveTokenPrice = tokenPrices[receiveToken];
-    const swapRate = payTokenPrice && receiveTokenPrice ? payTokenPrice / receiveTokenPrice : null;
-    const quotedReceiveAmount = swapRate && Number.parseFloat(payAmount) > 0
-        ? (Number.parseFloat(payAmount) * swapRate * 0.997).toFixed(6)
-        : '--';
-    const isStorePair = payToken === 'stORE' || receiveToken === 'stORE';
+
+    // ─── Values derived from the Jupiter quote (like Phantom) ───────────────
+    const payDecimals = TOKEN_DECIMALS[payToken] ?? 9;
+    const receiveDecimals = TOKEN_DECIMALS[receiveToken] ?? 9;
+    const numericPayAmount = Number.parseFloat(payAmount);
+    const quotedInAmount = quote ? Number(quote.inAmount) / (10 ** payDecimals) : null;
+    const quotedOutAmount = quote ? Number(quote.outAmount) / (10 ** receiveDecimals) : null;
+    const quotedRate = quote && quotedInAmount > 0 ? quotedOutAmount / quotedInAmount : null;
+    const priceImpactPct = quote?.priceImpactPct != null ? Math.abs(Number.parseFloat(quote.priceImpactPct)) * 100 : null;
+    const minReceivedAmount = quote?.otherAmountThreshold != null ? Number(quote.otherAmountThreshold) / (10 ** receiveDecimals) : null;
+    const routeLabels = Array.isArray(quote?.routePlan)
+        ? quote.routePlan.map((step) => step?.swapInfo?.label).filter(Boolean)
+        : [];
+    const payUsdValue = payTokenPrice && Number.isFinite(numericPayAmount) ? numericPayAmount * payTokenPrice : null;
+    const receiveUsdValue = quotedOutAmount != null && receiveTokenPrice ? quotedOutAmount * receiveTokenPrice : null;
+
+    const formatAmount = (value, maxDigits = 9) => (
+        value == null || !Number.isFinite(value) ? '--' : value.toLocaleString('en-US', { maximumFractionDigits: maxDigits })
+    );
+    const priceImpactColor = priceImpactPct == null
+        ? 'text-[#8f8d99]'
+        : priceImpactPct < 1 ? 'text-emerald-400' : priceImpactPct < 5 ? 'text-amber-400' : 'text-rose-400';
 
     const fetchBalances = useCallback(async () => {
         if (!publicKey) {
@@ -422,7 +452,7 @@ function UtilifyApp({ activeNetwork, onSelectNetwork }) {
             const lamports = await vaultConnection.getBalance(publicKey);
             setBalance((lamports / LAMPORTS_PER_SOL).toFixed(4));
         } catch (error) {
-            console.error('Gagal mengambil saldo SOL:', error);
+            console.error('Failed to fetch SOL balance:', error);
         }
 
         try {
@@ -455,7 +485,7 @@ function UtilifyApp({ activeNetwork, onSelectNetwork }) {
                     }
                 }
             } catch (error) {
-                console.error('Gagal mengambil saldo database:', error);
+                console.error('Failed to fetch database balance:', error);
             }
         }
 
@@ -475,7 +505,6 @@ function UtilifyApp({ activeNetwork, onSelectNetwork }) {
         }
 
         let isMounted = true;
-        setIsRateLoading(true);
         const priceRequests = [];
         if (tokenIds.length > 0) {
             priceRequests.push(
@@ -505,11 +534,72 @@ function UtilifyApp({ activeNetwork, onSelectNetwork }) {
                 Object.assign(normalizedPrices, storePrices);
                 setTokenPrices(normalizedPrices);
             })
-            .catch(() => { if (isMounted) setTokenPrices({}); })
-            .finally(() => { if (isMounted) setIsRateLoading(false); });
+            .catch(() => { if (isMounted) setTokenPrices({}); });
 
         return () => { isMounted = false; };
     }, [payToken, receiveToken]);
+
+    // ─── LIVE QUOTE: auto-fetch with debounce + periodic refresh ────────────
+    const requestQuote = useCallback(async ({ silent = false } = {}) => {
+        const amount = Number.parseFloat(payAmount);
+        const requestId = quoteRequestRef.current + 1;
+        quoteRequestRef.current = requestId;
+
+        if (!publicKey || !Number.isFinite(amount) || amount <= 0 || !TOKEN_MINTS[payToken] || !TOKEN_MINTS[receiveToken]) {
+            setQuote(null);
+            setQuoteFetchedAt(0);
+            setQuoteError(null);
+            setIsQuoting(false);
+            return null;
+        }
+
+        if (!silent) setIsQuoting(true);
+        try {
+            const res = await fetch('/api/swap/quote', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': getCsrfToken(),
+                    'Accept': 'application/json',
+                },
+                credentials: 'same-origin',
+                body: JSON.stringify({
+                    inputMint: TOKEN_MINTS[payToken],
+                    outputMint: TOKEN_MINTS[receiveToken],
+                    amount: Math.round(amount * (10 ** (TOKEN_DECIMALS[payToken] ?? 9))),
+                    slippageBps,
+                }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (requestId !== quoteRequestRef.current) return null;
+            if (!res.ok) {
+                throw new Error(data.error || data.message || 'Jupiter quote unavailable.');
+            }
+            setQuote(data);
+            setQuoteFetchedAt(Date.now());
+            setQuoteError(null);
+            return data;
+        } catch (error) {
+            if (requestId !== quoteRequestRef.current) return null;
+            setQuote(null);
+            setQuoteFetchedAt(0);
+            setQuoteError(error.message || 'Failed to fetch quote.');
+            return null;
+        } finally {
+            if (requestId === quoteRequestRef.current) setIsQuoting(false);
+        }
+    }, [publicKey, payAmount, payToken, receiveToken, slippageBps]);
+
+    useEffect(() => {
+        const timer = setTimeout(() => { requestQuote(); }, 450);
+        return () => clearTimeout(timer);
+    }, [requestQuote]);
+
+    useEffect(() => {
+        const interval = setInterval(() => { requestQuote({ silent: true }); }, 15000);
+        return () => clearInterval(interval);
+    }, [requestQuote]);
 
     const handleLogout = (e) => {
         e.preventDefault();
@@ -519,8 +609,9 @@ function UtilifyApp({ activeNetwork, onSelectNetwork }) {
     const handleSwapDirection = () => {
         setPayToken(receiveToken);
         setReceiveToken(payToken);
-        setPayAmount(receiveAmount);
-        setReceiveAmount(payAmount);
+        if (quotedOutAmount != null && quotedOutAmount > 0) {
+            setPayAmount(String(Number(quotedOutAmount.toFixed(6))));
+        }
     };
 
     const handlePayTokenChange = (token) => {
@@ -536,7 +627,6 @@ function UtilifyApp({ activeNetwork, onSelectNetwork }) {
         ? [
             { label: 'Top', tokens: ['USDC', 'USDT'] },
             { label: 'Yield', tokens: ['stORE'] },
-            { label: 'Others', tokens: ['ZEC', 'ORE'] },
         ]
         : [{ label: 'Top', tokens: ['SOL'] }];
 
@@ -559,16 +649,15 @@ function UtilifyApp({ activeNetwork, onSelectNetwork }) {
         if (!publicKey) { setVisible(true); return; }
 
         if (!Number.isFinite(amount) || amount <= 0) {
-            setTransactionNotice({ type: 'error', title: 'Invalid swap amount', message: 'Masukkan jumlah swap yang lebih besar dari 0.' });
+            setTransactionNotice({ type: 'error', title: 'Invalid swap amount', message: 'Enter a swap amount greater than 0.' });
             return;
         }
         if (!TOKEN_MINTS[payToken] || !TOKEN_MINTS[receiveToken]) {
-            setTransactionNotice({ type: 'error', title: 'Token belum tersedia', message: 'Token ini belum memiliki mint address Solana yang terkonfigurasi.' });
+            setTransactionNotice({ type: 'error', title: 'Token not available', message: 'This token does not have a configured Solana mint address yet.' });
             return;
         }
 
         setIsLoading(true);
-        setSwapStatus('Mengambil quote Jupiter...');
         try {
             let availableAmount = 0;
             if (payToken === 'SOL') {
@@ -590,29 +679,18 @@ function UtilifyApp({ activeNetwork, onSelectNetwork }) {
                 }
             }
 
-            const rawAmount = Math.round(amount * (10 ** TOKEN_DECIMALS[payToken]));
-            const quoteResponse = await fetch('/api/swap/quote', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'X-CSRF-TOKEN': getCsrfToken(),
-                    'Accept': 'application/json',
-                },
-                credentials: 'same-origin',
-                body: JSON.stringify({
-                    inputMint: TOKEN_MINTS[payToken],
-                    outputMint: TOKEN_MINTS[receiveToken],
-                    amount: rawAmount,
-                    slippageBps: 50,
-                }),
-            });
-            const quote = await quoteResponse.json();
-            if (!quoteResponse.ok) {
-                throw new Error(quote.error || quote.message || quote.details || 'Quote Jupiter gagal.');
+            // Reuse the displayed quote if still fresh (<25s), otherwise fetch a new one.
+            setSwapStatus('Fetching latest quote from Jupiter...');
+            const quoteAge = Date.now() - quoteFetchedAt;
+            let activeQuote = quote;
+            if (!activeQuote || quoteAge > 25000) {
+                activeQuote = await requestQuote();
+            }
+            if (!activeQuote) {
+                throw new Error(quoteError || 'Jupiter quote unavailable for this pair.');
             }
 
-            setSwapStatus('Menyiapkan transaksi swap...');
+            setSwapStatus('Preparing the swap transaction...');
             const transactionResponse = await fetch('/api/swap/transaction', {
                 method: 'POST',
                 headers: {
@@ -622,23 +700,27 @@ function UtilifyApp({ activeNetwork, onSelectNetwork }) {
                     'Accept': 'application/json',
                 },
                 credentials: 'same-origin',
-                body: JSON.stringify({ quoteResponse: quote, userPublicKey: publicKey.toBase58() }),
+                body: JSON.stringify({ quoteResponse: activeQuote, userPublicKey: publicKey.toBase58() }),
             });
             const transactionData = await transactionResponse.json();
             if (!transactionResponse.ok || !transactionData.swapTransaction) {
                 const detail = transactionData.details?.error || transactionData.details?.message;
-                throw new Error(transactionData.error || detail || 'Transaksi swap gagal dibuat.');
+                throw new Error(transactionData.error || detail || 'Failed to create the swap transaction.');
             }
 
             setSwapStatus('Open Solflare To Confirm...');
             const transactionBytes = Uint8Array.from(atob(transactionData.swapTransaction), (character) => character.charCodeAt(0));
             const transaction = VersionedTransaction.deserialize(transactionBytes);
             const signature = await sendTransaction(transaction, connection);
-
-            setSwapStatus('Confirm the transaction in Blockchain...');
             await connection.confirmTransaction(signature, 'confirmed');
             await fetchBalances();
-            setTransactionNotice({ type: 'success', title: 'Swap berhasil', message: `${amount} ${payToken} berhasil ditukar menjadi ${quotedReceiveAmount} ${receiveToken}.`, signature });
+            const swappedOut = Number(activeQuote.outAmount) / (10 ** (TOKEN_DECIMALS[receiveToken] ?? 9));
+            setTransactionNotice({
+                type: 'success',
+                title: 'Swap successful',
+                message: `${amount} ${payToken} successfully swapped into ${formatAmount(swappedOut)} ${receiveToken}.`,
+                signature,
+            });
         } catch (error) {
             console.error('Swap Error:', error);
             const message = error.message || 'The transaction was cancelled.';
@@ -696,7 +778,7 @@ function UtilifyApp({ activeNetwork, onSelectNetwork }) {
             await vaultConnection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, 'processed');
             await fetchBalances();
 
-            // Opsional: sinkronkan riwayat deposit ke server Laravel jika user sedang login
+            // Optional: sync the deposit history to the Laravel server when the user is logged in
             if (auth?.user) {
                 try {
                     await fetch('/api/private-balance/deposit', {
@@ -720,7 +802,7 @@ function UtilifyApp({ activeNetwork, onSelectNetwork }) {
             }
 
             setDepositAmount('');
-            setTransactionNotice({ type: 'success', title: 'Top Up Successful', message: `${amount} SOL berhasil disimpan ke Private Pool Vault on-chain.`, signature });
+            setTransactionNotice({ type: 'success', title: 'Top Up Successful', message: `${amount} SOL successfully stored in the Private Pool Vault on-chain.`, signature });
         } catch (error) {
             console.error('Error deposit:', error);
             setTransactionNotice({ type: 'error', title: 'Top Up Failed', message: error.message || 'Please have at least 0.01 SOL in your wallet.' });
@@ -786,7 +868,7 @@ function UtilifyApp({ activeNetwork, onSelectNetwork }) {
                                         href="/admin/users"
                                         className="bg-[#4f46e5] text-white px-4 py-1.5 rounded-lg text-xs font-medium hover:bg-[#4d44e3] transition-colors flex items-center gap-1.5 border border-[#c3c0ff]/20"
                                     >
-                                        <span className="material-symbols-outlined text-[16px]">group</span> Kelola User
+                                        <span className="material-symbols-outlined text-[16px]">group</span> Manage Users
                                     </Link>
                                 )}
                                 <span className="text-sm text-gray-400 hidden sm:inline">{auth.user.name}</span>
@@ -853,7 +935,7 @@ function UtilifyApp({ activeNetwork, onSelectNetwork }) {
                                 <button
                                     onClick={fetchBalances}
                                     disabled={isBalanceRefreshing}
-                                    title="Segarkan Saldo"
+                                    title="Refresh Balances"
                                     className="bg-[#18181B] text-[#c7c4d8] hover:text-white p-2.5 rounded-full border border-white/10 transition-colors flex items-center justify-center cursor-pointer disabled:opacity-50"
                                 >
                                     <span className={`material-symbols-outlined text-[18px] ${isBalanceRefreshing ? 'animate-spin' : ''}`}>sync</span>
@@ -861,9 +943,9 @@ function UtilifyApp({ activeNetwork, onSelectNetwork }) {
                             )}
                         </div>
 
-                        {/* DUAL BALANCE OVERVIEW: SALDO E-WALLET & SALDO PRIVATE POOL */}
+                        {/* DUAL BALANCE OVERVIEW: E-WALLET BALANCE & PRIVATE POOL BALANCE */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-xl">
-                            {/* CARD 1: SALDO E-WALLET */}
+                            {/* CARD 1: E-WALLET BALANCE */}
                             <div className="rounded-xl border border-white/10 bg-[#18181B]/80 backdrop-blur-md p-4 shadow-lg flex flex-col justify-between hover:border-white/20 transition-colors">
                                 <div>
                                     <div className="flex items-center justify-between text-xs font-mono uppercase tracking-[0.12em] text-[#8f8d99]">
@@ -899,7 +981,7 @@ function UtilifyApp({ activeNetwork, onSelectNetwork }) {
                                 </div>
                             </div>
 
-                            {/* CARD 2: SALDO PRIVATE POOL (VAULT) */}
+                            {/* CARD 2: PRIVATE POOL BALANCE (VAULT) */}
                             <div className="rounded-xl border border-[#c3c0ff]/30 bg-[#18181B]/80 backdrop-blur-md p-4 shadow-lg flex flex-col justify-between hover:border-[#c3c0ff]/50 transition-colors relative overflow-hidden">
                                 <div className="absolute top-0 right-0 w-24 h-24 bg-[#4f46e5]/10 rounded-full blur-xl pointer-events-none" />
                                 <div>
@@ -952,14 +1034,38 @@ function UtilifyApp({ activeNetwork, onSelectNetwork }) {
                                         <p className="text-xs uppercase tracking-[0.2em] text-[#8f8d99] font-mono">Private swap</p>
                                         <p className="mt-1 text-sm text-[#c7c4d8]">Trade tokens without leaving your wallet flow.</p>
                                     </div>
-                                    <button
-                                        type="button"
-                                        aria-label="Swap settings"
-                                        title="Swap settings"
-                                        className="rounded-full border border-white/10 p-2 text-[#c7c4d8] hover:text-white hover:bg-white/5 cursor-pointer"
-                                    >
-                                        <span className="material-symbols-outlined text-[18px]">tune</span>
-                                    </button>
+                                    <div className="relative">
+                                        <button
+                                            type="button"
+                                            aria-label="Swap settings"
+                                            title="Slippage settings"
+                                            aria-expanded={isSlippageOpen}
+                                            onClick={() => setIsSlippageOpen((open) => !open)}
+                                            className="rounded-full border border-white/10 p-2 text-[#c7c4d8] hover:text-white hover:bg-white/5 cursor-pointer"
+                                        >
+                                            <span className="material-symbols-outlined text-[18px]">tune</span>
+                                        </button>
+                                        {isSlippageOpen && (
+                                            <div className="absolute right-0 top-full mt-2 w-40 rounded-xl border border-white/10 bg-[#18181B] p-1.5 shadow-2xl z-30">
+                                                <div className="px-2 pb-1 pt-1.5 text-[10px] uppercase tracking-[0.16em] text-[#8f8d99] font-mono">Max Slippage</div>
+                                                {SLIPPAGE_OPTIONS.map((option) => (
+                                                    <button
+                                                        key={option.value}
+                                                        type="button"
+                                                        onClick={() => { setSlippageBps(option.value); setIsSlippageOpen(false); }}
+                                                        className={`flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-xs font-mono transition-colors cursor-pointer ${
+                                                            slippageBps === option.value ? 'bg-[#4f46e5]/30 text-[#c3c0ff] font-bold' : 'text-[#e5e1e4] hover:bg-white/10'
+                                                        }`}
+                                                    >
+                                                        <span>{option.label}</span>
+                                                        {slippageBps === option.value && (
+                                                            <span className="material-symbols-outlined text-[16px] text-[#c3c0ff]">check</span>
+                                                        )}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                                 <div className="space-y-2 relative">
                                     <div className="bg-[#09090B] border border-white/10 rounded-xl p-4 focus-within:border-[#c3c0ff] transition-colors">
@@ -986,6 +1092,9 @@ function UtilifyApp({ activeNetwork, onSelectNetwork }) {
                                                 <TokenSelect value={payToken} groups={FROM_TOKEN_GROUPS} onChange={handlePayTokenChange} />
                                             </div>
                                         </div>
+                                        <p className="mt-1 text-[11px] text-[#8f8d99] font-mono">
+                                            {payUsdValue != null ? `≈ $${payUsdValue.toLocaleString('en-US', { maximumFractionDigits: 2 })}` : '\u00A0'}
+                                        </p>
                                     </div>
 
                                     <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10">
@@ -997,37 +1106,77 @@ function UtilifyApp({ activeNetwork, onSelectNetwork }) {
                                     <div className="bg-[#09090B] border border-white/10 rounded-xl p-4 focus-within:border-[#c3c0ff] transition-colors">
                                         <div className="flex justify-between text-[#8f8d99] text-xs font-mono mb-3">
                                             <span>Receive</span>
-                                            <span>Estimated output</span>
+                                            <span className="flex items-center gap-1.5">
+                                                {isQuoting && <span className="material-symbols-outlined text-[14px] animate-spin">progress_activity</span>}
+                                                Live quote
+                                            </span>
                                         </div>
                                         <div className="flex justify-between items-center gap-4">
                                             <input
                                                 type="text"
-                                                value={quotedReceiveAmount}
+                                                value={quotedOutAmount != null ? formatAmount(quotedOutAmount) : '--'}
                                                 readOnly
                                                 aria-label="Estimated receive amount"
                                                 className="bg-transparent text-3xl font-semibold text-[#e5e1e4] outline-none min-w-0 w-full cursor-default"
                                             />
                                             <TokenSelect value={receiveToken} groups={availableToGroups} onChange={setReceiveToken} />
                                         </div>
+                                        <p className="mt-1 text-[11px] text-[#8f8d99] font-mono">
+                                            {receiveUsdValue != null ? `≈ $${receiveUsdValue.toLocaleString('en-US', { maximumFractionDigits: 2 })}` : '\u00A0'}
+                                        </p>
                                     </div>
                                 </div>
-                                <div className="flex justify-between mt-4 text-[11px] text-[#8f8d99] font-mono">
-                                    <span>Rate</span>
-                                    <span>
-                                        {isRateLoading ? 'Loading live rate...' : swapRate ? `1 ${payToken} ≈ ${(swapRate * 0.997).toFixed(6)} ${receiveToken}` : isStorePair ? 'stORE rate not configured' : 'Rate unavailable'}
-                                    </span>
+                                <div className="mt-4 space-y-1.5 rounded-lg border border-white/5 bg-[#09090B]/60 px-3 py-2.5 text-[11px] font-mono">
+                                    <div className="flex justify-between gap-3">
+                                        <span className="text-[#8f8d99]">Rate</span>
+                                        <span className="text-[#c7c4d8] text-right">
+                                            {quotedRate ? `1 ${payToken} ≈ ${formatAmount(quotedRate, 6)} ${receiveToken}` : '—'}
+                                        </span>
+                                    </div>
+                                    <div className="flex justify-between gap-3">
+                                        <span className="text-[#8f8d99]">Price Impact</span>
+                                        <span className={priceImpactColor}>
+                                            {priceImpactPct != null ? `${priceImpactPct > 0 && priceImpactPct < 0.01 ? '<0.01' : priceImpactPct.toFixed(2)}%` : '—'}
+                                        </span>
+                                    </div>
+                                    <div className="flex justify-between gap-3">
+                                        <span className="text-[#8f8d99]">Min Received</span>
+                                        <span className="text-[#c7c4d8] text-right">
+                                            {minReceivedAmount != null ? `${formatAmount(minReceivedAmount)} ${receiveToken}` : '—'}
+                                        </span>
+                                    </div>
+                                    <div className="flex justify-between gap-3">
+                                        <span className="text-[#8f8d99]">Network Fee</span>
+                                        <span className="text-[#c7c4d8]">≤ 0.001005 SOL</span>
+                                    </div>
+                                    <div className="flex justify-between gap-3">
+                                        <span className="text-[#8f8d99]">Route</span>
+                                        <span className="text-[#c7c4d8] text-right truncate max-w-[180px]" title={routeLabels.join(' → ')}>
+                                            {routeLabels.length > 0
+                                                ? (routeLabels.length > 2 ? `${routeLabels.slice(0, 2).join(' → ')} +${routeLabels.length - 2}` : routeLabels.join(' → '))
+                                                : 'Jupiter'}
+                                        </span>
+                                    </div>
                                 </div>
-                                <div className="flex justify-end text-[11px] text-[#8f8d99] font-mono">
-                                    <span>{swapRate ? `1 ${receiveToken} ≈ ${(1 / swapRate).toFixed(6)} ${payToken}` : isStorePair ? 'Requires stORE market price' : 'Select a supported pair'}</span>
-                                </div>
+                                {quoteError && (
+                                    <div className="mt-3 rounded-lg border border-rose-400/20 bg-rose-400/10 p-3 text-xs text-rose-300 font-mono">
+                                        {quoteError}
+                                    </div>
+                                )}
                                 {swapStatus && (
                                     <div className="mt-3 rounded-lg border border-[#c3c0ff]/20 bg-[#4f46e5]/10 p-3 text-xs text-[#c3c0ff] font-mono animate-pulse">
                                         {swapStatus}
                                     </div>
                                 )}
                                 {publicKey ? (
-                                    <button onClick={handleReviewSwap} disabled={isLoading} className="w-full mt-5 bg-[#4f46e5] text-white py-4 rounded-lg text-xs font-mono hover:bg-[#4d44e3] transition-colors border border-[#c3c0ff]/20 cursor-pointer font-bold disabled:opacity-50">
-                                        {isLoading ? 'Processing Swap...' : 'Review Swap'}
+                                    <button
+                                        onClick={handleReviewSwap}
+                                        disabled={isLoading}
+                                        className="w-full mt-5 bg-[#4f46e5] text-white py-4 rounded-lg text-xs font-mono hover:bg-[#4d44e3] transition-colors border border-[#c3c0ff]/20 cursor-pointer font-bold disabled:opacity-50"
+                                    >
+                                        {isLoading
+                                            ? 'Processing Swap...'
+                                            : (numericPayAmount > 0 && !quote && !quoteError ? 'Fetching Quote...' : `Review Swap (${payToken} → ${receiveToken})`)}
                                     </button>
                                 ) : (
                                     <div className="w-full mt-6 flex justify-center">
@@ -1039,7 +1188,7 @@ function UtilifyApp({ activeNetwork, onSelectNetwork }) {
 
                         {activeTab === 'deposit' && (
                             <div className="space-y-4">
-                                {/* Saldo Overview Box */}
+                                {/* Balance Overview Box */}
                                 <div className="grid grid-cols-2 gap-3 p-3.5 rounded-xl bg-[#09090B] border border-white/10 text-xs font-mono">
                                     <div>
                                         <span className="text-[#8f8d99] block text-[10px] uppercase tracking-wider"> E-Wallet </span>
@@ -1105,7 +1254,7 @@ function UtilifyApp({ activeNetwork, onSelectNetwork }) {
 
                                 <div className="relative flex py-1 items-center">
                                     <div className="flex-grow border-t border-white/10"></div>
-                                    <span className="flex-shrink mx-3 text-[11px] text-gray-500 font-mono">atau</span>
+                                    <span className="flex-shrink mx-3 text-[11px] text-gray-500 font-mono">or</span>
                                     <div className="flex-grow border-t border-white/10"></div>
                                 </div>
 
@@ -1166,7 +1315,7 @@ function UtilifyApp({ activeNetwork, onSelectNetwork }) {
                                 <span className="font-mono text-[#c3c0ff]">{Number.parseFloat(depositAmount).toFixed(6)} SOL</span>
                             </div>
                             <div className="flex justify-between text-xs text-[#8f8d99] font-mono">
-                                <span>Estimasi Saldo Pool Baru</span>
+                                <span>Estimated New Pool Balance</span>
                                 <span className="text-emerald-300 font-semibold">
                                     {((Number.parseFloat(privatePoolBalance || '0') || 0) + (Number.parseFloat(depositAmount || '0') || 0)).toFixed(6)} SOL
                                 </span>
@@ -1174,7 +1323,7 @@ function UtilifyApp({ activeNetwork, onSelectNetwork }) {
                         </div>
 
                         <p className="mt-4 text-sm leading-6 text-[#c7c4d8]">
-                            Solflare akan membuka pop-up untuk meminta persetujuan transaksi. Dana akan dikirim ke vault Private Pool setelah Anda menyetujuinya.
+                            Solflare will open a pop-up asking for transaction approval. Funds will be sent to the Private Pool vault once you approve it.
                         </p>
 
                         <div className="mt-6 flex gap-3">
@@ -1182,14 +1331,14 @@ function UtilifyApp({ activeNetwork, onSelectNetwork }) {
                                 onClick={() => setIsDepositConfirmOpen(false)}
                                 className="flex-1 rounded-lg border border-white/10 bg-[#2a2a2c] py-3 text-xs font-mono text-[#e5e1e4] transition-colors hover:bg-[#39393b] cursor-pointer"
                             >
-                                Batal
+                                Cancel
                             </button>
                             <button
                                 onClick={handleDeposit}
                                 disabled={isLoading}
                                 className="flex-1 rounded-lg bg-[#4f46e5] py-3 text-xs font-mono text-white transition-colors hover:bg-[#4d44e3] disabled:opacity-50 cursor-pointer font-bold"
                             >
-                                Lanjutkan di Solflare
+                                Continue in Solflare
                             </button>
                         </div>
                     </div>
@@ -1262,7 +1411,7 @@ export default function Welcome() {
             const stored = window.localStorage.getItem('solana-active-network');
             if (stored && SOLANA_NETWORKS[stored]) return stored;
         } catch (error) {
-            console.warn('Gagal membaca jaringan Solana tersimpan:', error);
+            console.warn('Failed to read stored Solana network:', error);
         }
         return DEFAULT_NETWORK_KEY;
     });
@@ -1280,7 +1429,7 @@ export default function Welcome() {
         try {
             window.localStorage.setItem('solana-active-network', networkKey);
         } catch (error) {
-            console.warn('Gagal menyimpan jaringan Solana:', error);
+            console.warn('Failed to save Solana network:', error);
         }
     }, []);
 

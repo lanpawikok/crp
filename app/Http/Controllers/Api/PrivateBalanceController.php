@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Auth;
 
 class PrivateBalanceController extends Controller
 {
-    // Ambil saldo privat user yang sedang login
+    // Get the private balance of the currently logged-in user
     public function index()
     {
         $user = Auth::user();
@@ -23,7 +23,7 @@ class PrivateBalanceController extends Controller
         ]);
     }
 
-    // Proses Deposit (Top Up)
+    // Process Deposit (Top Up)
     public function deposit(Request $request)
     {
         $request->validate([
@@ -36,14 +36,14 @@ class PrivateBalanceController extends Controller
             ['balance' => 0]
         );
 
-        // Tambah saldo
+        // Add balance
         $balance->balance += $request->amount;
         $balance->save();
 
         return response()->json([
             'success' => true,
             'new_balance' => $balance->balance,
-            'message' => 'Deposit berhasil!'
+            'message' => 'Deposit successful!'
         ]);
     }
 }

@@ -10,7 +10,7 @@ export default function Login({ status }) {
     const submit = (e) => {
         e.preventDefault();
 
-        post('/login');  // ← FIX: Ganti route('login') dengan '/login'
+        post('/login');  // ← FIX: Use '/login' instead of route('login')
     };
 
     return (
@@ -208,7 +208,7 @@ export default function Login({ status }) {
                                     Didn't have an account?{' '}
 
                                     <Link
-                                        href="/register"  // ← FIX: Ganti "register" dengan "/register"
+                                        href="/register"  // ← FIX: Use "/register" instead of "register"
                                         className="text-indigo-300 hover:text-indigo-200 font-bold transition"
                                     >
                                         Register Here

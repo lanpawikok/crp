@@ -33,7 +33,7 @@ class UserController extends Controller
         return redirect()->back();
     }
 
-    // --- TAMBAHKAN METHOD UPDATE INI ---
+    // --- ADD THIS UPDATE METHOD ---
     public function update(Request $request, User $user)
     {
         $request->validate([
@@ -47,7 +47,7 @@ class UserController extends Controller
             'email' => $request->email,
         ];
 
-        // Hanya update password jika diisi
+        // Only update the password when provided
         if ($request->filled('password')) {
             $data['password'] = Hash::make($request->password);
         }
@@ -56,14 +56,14 @@ class UserController extends Controller
 
         return redirect()->back();
     }
-    // --- SELESAI ---
+    // --- DONE ---
 
     public function destroy(User $user)
     {
         if ($user->email === 'admin@notracefi.test') {
-            return back()->with('error', 'Tidak bisa menghapus Super Admin!');
+            return back()->with('error', 'Cannot delete the Super Admin!');
         }
         $user->delete();
-        return back()->with('success', 'User berhasil dihapus');
+        return back()->with('success', 'User deleted successfully');
     }
 }

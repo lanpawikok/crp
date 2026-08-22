@@ -3,7 +3,7 @@
 namespace App\Providers;
 
 use Illuminate\Support\Facades\Vite;
-use Illuminate\Support\Facades\URL; // <-- Tambahkan baris ini
+use Illuminate\Support\Facades\URL; // <-- Added this line
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -23,7 +23,7 @@ class AppServiceProvider extends ServiceProvider
     {
         Vite::prefetch(concurrency: 3);
 
-        // Tambahkan blok ini untuk memaksa HTTPS di production
+        // Add this block to force HTTPS in production
         if (config('app.env') === 'production') {
             URL::forceScheme('https');
         }

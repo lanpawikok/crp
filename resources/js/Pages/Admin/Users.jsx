@@ -1,11 +1,11 @@
-import { Head, Link, router, usePage } from '@inertiajs/react'; // Tambahkan usePage
+import { Head, Link, router, usePage } from '@inertiajs/react'; // Added usePage
 import { useState } from 'react';
 
 export default function AdminUsers({ users }) {
-    // Ambil error dari props Inertia
+    // Get errors from Inertia props
     const { errors } = usePage().props;
 
-    // State untuk Modal dan Form
+    // State for Modal and Form
     const [showModal, setShowModal] = useState(false);
     const [editingUser, setEditingUser] = useState(null);
     const [formData, setFormData] = useState({
@@ -15,7 +15,7 @@ export default function AdminUsers({ users }) {
         password_confirmation: '',
     });
 
-    // Handle input perubahan form
+    // Handle form input changes
     const handleChange = (e) => {
         setFormData({
             ...formData,
@@ -23,14 +23,14 @@ export default function AdminUsers({ users }) {
         });
     };
 
-    // Buka modal untuk Tambah User
+    // Open modal to Add User
     const openCreateModal = () => {
         setEditingUser(null);
         setFormData({ name: '', email: '', password: '', password_confirmation: '' });
         setShowModal(true);
     };
 
-    // Buka modal untuk Edit User
+    // Open modal to Edit User
     const openEditModal = (user) => {
         setEditingUser(user);
         setFormData({ 
@@ -42,7 +42,7 @@ export default function AdminUsers({ users }) {
         setShowModal(true);
     };
 
-    // Simpan data (Tambah atau Update)
+    // Save data (Create or Update)
     const handleSubmit = (e) => {
         e.preventDefault();
         
@@ -63,25 +63,25 @@ export default function AdminUsers({ users }) {
         }
     };
 
-    // Hapus User
+    // Delete User
     const handleDelete = (id, email) => {
         if (email === 'admin@notracefi.test') {
-            alert('Tidak bisa menghapus Super Admin!');
+            alert('Cannot delete the Super Admin!');
             return;
         }
-        if (confirm('Apakah Anda yakin ingin menghapus user ini?')) {
+        if (confirm('Are you sure you want to delete this user?')) {
             router.delete(`/admin/users/${id}`);
         }
     };
 
     return (
         <div className="min-h-screen bg-[#09090B] text-[#e5e1e4] p-8 pt-24">
-            <Head title="Kelola User" />
+            <Head title="Manage Users" />
             
-            {/* Header & Tombol Tambah */}
+            {/* Header & Add Button */}
             <div className="flex justify-between items-center mb-8">
                 <div>
-                    <h1 className="text-3xl font-bold text-[#c3c0ff]">Kelola User</h1>
+                    <h1 className="text-3xl font-bold text-[#c3c0ff]">Manage Users</h1>
                     <p className="text-gray-400 text-sm mt-1">Total User: {users.length}</p>
                 </div>
                 <div className="flex gap-4">
@@ -90,18 +90,18 @@ export default function AdminUsers({ users }) {
                         className="bg-[#4f46e5] text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-[#4d44e3] transition-colors flex items-center gap-2 border border-[#c3c0ff]/20"
                     >
                         <span className="material-symbols-outlined text-[18px]">add</span>
-                        Tambah User
+                        Add User
                     </button>
                     <Link 
                         href="/admin/dashboard"
                         className="text-[#c7c4d8] hover:text-white transition-colors flex items-center gap-1 bg-[#201f22] px-4 py-2 rounded-lg border border-white/10"
                     >
-                        <span className="material-symbols-outlined">arrow_back</span> Kembali
+                        <span className="material-symbols-outlined">arrow_back</span> Back
                     </Link>
                 </div>
             </div>
 
-            {/* Tabel Data User */}
+            {/* Users Data Table */}
             <div className="bg-[#18181B] rounded-xl border border-white/10 overflow-hidden shadow-lg">
                 <table className="w-full text-left">
                     <thead className="bg-[#201f22] border-b border-white/10">
@@ -121,7 +121,7 @@ export default function AdminUsers({ users }) {
                                 <td className="p-4 flex justify-center gap-2">
                                     {user.email !== 'admin@notracefi.test' ? (
                                         <>
-                                            {/* Tombol Edit */}
+                                            {/* Edit Button */}
                                             <button 
                                                 onClick={() => openEditModal(user)}
                                                 className="text-blue-400 hover:text-blue-300 hover:bg-blue-400/10 px-3 py-1 rounded text-xs transition-colors flex items-center gap-1"
@@ -130,13 +130,13 @@ export default function AdminUsers({ users }) {
                                                 Edit
                                             </button>
                                             
-                                            {/* Tombol Hapus */}
+                                            {/* Delete Button */}
                                             <button 
                                                 onClick={() => handleDelete(user.id, user.email)}
                                                 className="text-red-400 hover:text-red-300 hover:bg-red-400/10 px-3 py-1 rounded text-xs transition-colors flex items-center gap-1"
                                             >
                                                 <span className="material-symbols-outlined text-[14px]">delete</span>
-                                                Hapus
+                                                Delete
                                             </button>
                                         </>
                                     ) : (
@@ -161,7 +161,7 @@ export default function AdminUsers({ users }) {
                         </button>
 
                         <h2 className="text-2xl font-bold text-[#c3c0ff] mb-6">
-                            {editingUser ? 'Edit User' : 'Tambah User Baru'}
+                            {editingUser ? 'Edit User' : 'Add New User'}
                         </h2>
 
                         <form onSubmit={handleSubmit} className="space-y-4">
@@ -175,7 +175,7 @@ export default function AdminUsers({ users }) {
                                     onChange={handleChange}
                                     required
                                     className="w-full bg-[#09090B] border border-white/10 rounded-lg p-3 text-white outline-none focus:border-[#c3c0ff] transition-colors"
-                                    placeholder="Masukkan nama user"
+                                    placeholder="Enter user name"
                                 />
                                 {errors.name && (
                                     <p className="text-red-400 text-xs mt-1">{errors.name}</p>
@@ -202,7 +202,7 @@ export default function AdminUsers({ users }) {
                             {/* Input Password */}
                             <div>
                                 <label className="block text-sm text-gray-400 mb-1">
-                                    {editingUser ? 'Password Baru (Kosongkan jika tidak diganti)' : 'Password'}
+                                    {editingUser ? 'New Password (Leave empty if unchanged)' : 'Password'}
                                 </label>
                                 <input 
                                     type="password" 
@@ -211,7 +211,7 @@ export default function AdminUsers({ users }) {
                                     onChange={handleChange}
                                     required={!editingUser}
                                     className="w-full bg-[#09090B] border border-white/10 rounded-lg p-3 text-white outline-none focus:border-[#c3c0ff] transition-colors"
-                                    placeholder="Minimal 8 karakter"
+                                    placeholder="Minimum 8 characters"
                                 />
                                 {errors.password && (
                                     <p className="text-red-400 text-xs mt-1">{errors.password}</p>
@@ -220,7 +220,7 @@ export default function AdminUsers({ users }) {
 
                             {/* Input Confirm Password */}
                             <div>
-                                <label className="block text-sm text-gray-400 mb-1">Konfirmasi Password</label>
+                                <label className="block text-sm text-gray-400 mb-1">Confirm Password</label>
                                 <input 
                                     type="password" 
                                     name="password_confirmation" 
@@ -235,12 +235,12 @@ export default function AdminUsers({ users }) {
                                 )}
                             </div>
 
-                            {/* Tombol Submit */}
+                            {/* Submit Button */}
                             <button 
                                 type="submit"
                                 className="w-full bg-[#4f46e5] hover:bg-[#4d44e3] text-white py-3 rounded-lg font-medium transition-colors mt-4"
                             >
-                                {editingUser ? 'Update User' : 'Simpan User Baru'}
+                                {editingUser ? 'Update User' : 'Save New User'}
                             </button>
                         </form>
                     </div>

@@ -10,7 +10,7 @@ class AdminController extends Controller
 {
     public function index()
     {
-        // Hitung total user (opsional untuk dashboard)
+        // Count total users (optional for the dashboard)
         $totalUsers = User::count();
 
         return Inertia::render('Admin/Dashboard', [
