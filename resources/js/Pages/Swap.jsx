@@ -108,17 +108,17 @@ function SwapContent() {
         }
 
         if (!depositAmount || isNaN(amount) || amount <= 0) {
-            alert("Masukkan jumlah Top Up SOL yang valid!");
+            alert("Please enter a valid SOL top-up amount!");
             return;
         }
 
         if (balance && amount > parseFloat(balance)) {
-            alert("Saldo SOL di wallet kamu tidak mencukupi!");
+            alert("Your wallet does not have enough SOL balance!");
             return;
         }
 
         setIsLoading(true);
-        setTxStatus('Menyiapkan Transaksi Solana...');
+        setTxStatus('Preparing Transaction Solana...');
 
         try {
             // 1. Ambil blockhash terlebih dahulu
@@ -138,19 +138,19 @@ function SwapContent() {
                 })
             );
 
-            setTxStatus('Membuka Pop-up Solflare (Silakan Sign)...');
+            setTxStatus('Opening Solflare Pop-up (Please Sign)...');
 
             // 3. Panggil sendTransaction langsung tanpa ada await async tambahan di sela-sela
             const signature = await sendTransaction(transaction, connection);
             
-            setTxStatus('Mengonfirmasi transaksi di Blockchain...');
+            setTxStatus('Confirming transaction on the blockchain...');
             await connection.confirmTransaction({
                 signature,
                 blockhash,
                 lastValidBlockHeight
             }, 'processed');
 
-            setTxStatus('Mencatat saldo ke server Laravel...');
+            setTxStatus('Recording balance to the server...');
 
             // 4. Kirim Bukti Transaksi (Signature) ke Backend Laravel
             const response = await fetch('/api/private-balance/deposit', {
