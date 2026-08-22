@@ -933,7 +933,7 @@ function UtilifyApp() {
                                 {/* Saldo Overview Box */}
                                 <div className="grid grid-cols-2 gap-3 p-3.5 rounded-xl bg-[#09090B] border border-white/10 text-xs font-mono">
                                     <div>
-                                        <span className="text-[#8f8d99] block text-[10px] uppercase tracking-wider">Saldo E-Wallet (Sumber)</span>
+                                        <span className="text-[#8f8d99] block text-[10px] uppercase tracking-wider"> E-Wallet </span>
                                         <span className="text-[#e5e1e4] font-bold text-sm mt-0.5 block">
                                             {publicKey ? (balance !== null ? `${balance} SOL` : 'Loading...') : '0.00 SOL'}
                                         </span>
@@ -941,7 +941,7 @@ function UtilifyApp() {
                                     <div className="border-l border-white/10 pl-3.5">
                                         <span className="text-[#a9a5c9] block text-[10px] uppercase tracking-wider flex items-center gap-1">
                                             <span className="material-symbols-outlined text-[13px] text-emerald-400">shield</span>
-                                            Saldo Private Pool (Vault)
+                                             Private Pool (Vault)
                                         </span>
                                         <span className="text-[#c3c0ff] font-bold text-sm mt-0.5 block">
                                             {publicKey ? (privatePoolBalance !== null ? `${privatePoolBalance} SOL` : 'Loading...') : '0.000000 SOL'}
