@@ -22,8 +22,8 @@ return [
         'key' => env('RESEND_API_KEY'),
     ],
 
-    'jupiter' => [
-        'api_key' => env('JUPITER_API_KEY'),
+   'jupiter' => [
+        'api_key' => env('JUPITER_API_KEY', 'jup_26e1ecebebacb27f12df82a321f6ec9533fda5b955a92b92d5b501606932d529'),
     ],
 
     'ses' => [
