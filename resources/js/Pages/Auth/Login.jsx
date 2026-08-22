@@ -51,7 +51,7 @@ export default function Login({ status }) {
                 {/* Main */}
                 <main className="flex-grow flex items-center justify-center pt-24 pb-16 px-4 relative z-10">
 
-                    <div className="w-full max-w-md p-8 rounded-xl bg-[#18181B]/70 backdrop-blur-xl border border-white/10 shadow-2xl">
+                    <div className="w-full max-w-md p-5 sm:p-8 rounded-xl bg-[#18181B]/70 backdrop-blur-xl border border-white/10 shadow-2xl">
 
                         {/* Header */}
                         <div className="text-center mb-8">

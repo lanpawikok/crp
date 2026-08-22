@@ -165,19 +165,19 @@ export default function LandingPage() {
             <div className="hero-glow"></div>
 
             {/* Navbar */}
-            <nav className="w-full top-0 px-6 md:px-10 py-2 bg-transparent z-50 relative">
-                <div className="flex justify-between items-center w-full max-w-[1280px] mx-auto py-6">
-                    <div className="flex items-center gap-3 group cursor-pointer">
-                        <div className="spinner-ring"></div>
-                        <span className="text-[32px] font-bold text-[#c3c0ff] tracking-tight glow-text font-['Sora']">NOTRACEFI</span>
+            <nav className="w-full top-0 px-4 sm:px-6 md:px-10 py-2 bg-transparent z-50 relative">
+                <div className="flex justify-between items-center w-full max-w-[1280px] mx-auto py-3 sm:py-6">
+                    <div className="flex items-center gap-2 sm:gap-3 group cursor-pointer">
+                        <div className="w-7 h-7 sm:w-9 sm:h-9 spinner-ring"></div>
+                        <span className="text-xl sm:text-[32px] font-bold text-[#c3c0ff] tracking-tight glow-text font-['Sora']">NOTRACEFI</span>
                     </div>
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2 sm:gap-4">
                         <button className="text-[#c4c7c8] hover:text-[#c3c0ff] transition-colors hover:bg-white/10 p-2 rounded-full duration-300">
-                            <span className="material-symbols-outlined text-2xl">notifications</span>
+                            <span className="material-symbols-outlined text-xl sm:text-2xl">notifications</span>
                         </button>
                         <Link
                             href="/login"
-                            className="bg-[#c3c0ff] text-[#131315] px-7 py-2.5 rounded-full text-xs font-bold hover:bg-opacity-90 transition-all scale-95 active:opacity-80 shadow-[0_0_25px_rgba(79,70,229,0.25)] hover:shadow-[0_0_40px_rgba(79,70,229,0.35)] duration-300"
+                            className="bg-[#c3c0ff] text-[#131315] px-4 py-2 sm:px-7 sm:py-2.5 rounded-full text-xs font-bold hover:bg-opacity-90 transition-all scale-95 active:opacity-80 shadow-[0_0_25px_rgba(79,70,229,0.25)] hover:shadow-[0_0_40px_rgba(79,70,229,0.35)] duration-300"
                         >
                             Connect
                         </Link>
@@ -186,13 +186,13 @@ export default function LandingPage() {
             </nav>
 
             {/* Main Content */}
-            <main className="flex-grow flex flex-col items-center justify-center px-4 md:px-10 py-16 relative z-10 text-center">
+            <main className="flex-grow flex flex-col items-center justify-center px-4 md:px-10 py-10 sm:py-16 relative z-10 text-center">
                 <div className="glass-panel rounded-full px-5 py-1.5 mb-8 inline-flex items-center gap-2 border border-white/5 badge-glow">
                     <span className="text-[15px]">✨</span>
                     <span className="text-xs text-[#c4c7c8] tracking-[0.2em] uppercase font-medium">Space swap</span>
                 </div>
 
-                <h1 className="text-[40px] md:text-[72px] text-[#c3c0ff] glow-text mb-6 max-w-4xl mx-auto tracking-tight leading-[1.1] font-['Sora'] font-semibold">
+                <h1 className="text-[34px] sm:text-[48px] md:text-[72px] text-[#c3c0ff] glow-text mb-6 max-w-4xl mx-auto tracking-tight leading-[1.1] font-['Sora'] font-semibold">
                     NoTracefi<br />
                     <span className="relative inline-block">
                         to Moon
@@ -206,7 +206,7 @@ export default function LandingPage() {
                 </p>
 
                 {/* Social Links */}
-                <div className="flex items-center gap-5 mb-20">
+                <div className="flex items-center gap-4 sm:gap-5 mb-12 sm:mb-20">
                     {/* X (Twitter) Link */}
                     <a
                         className="w-12 h-12 rounded-full glass-panel flex items-center justify-center text-[#c4c7c8] hover:text-[#c3c0ff] hover:border-[#c3c0ff]/40 transition-all duration-300 hover:shadow-[0_0_30px_-5px_rgba(79,70,229,0.15)] border border-white/5"

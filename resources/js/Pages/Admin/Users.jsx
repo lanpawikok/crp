@@ -75,11 +75,11 @@ export default function AdminUsers({ users }) {
     };
 
     return (
-        <div className="min-h-screen bg-[#09090B] text-[#e5e1e4] p-8 pt-24">
+        <div className="min-h-screen bg-[#09090B] text-[#e5e1e4] p-4 sm:p-8 pt-20 sm:pt-24">
             <Head title="Manage Users" />
             
             {/* Header & Add Button */}
-            <div className="flex justify-between items-center mb-8">
+            <div className="flex flex-wrap gap-4 justify-between items-center mb-6 sm:mb-8">
                 <div>
                     <h1 className="text-3xl font-bold text-[#c3c0ff]">Manage Users</h1>
                     <p className="text-gray-400 text-sm mt-1">Total User: {users.length}</p>
@@ -102,8 +102,8 @@ export default function AdminUsers({ users }) {
             </div>
 
             {/* Users Data Table */}
-            <div className="bg-[#18181B] rounded-xl border border-white/10 overflow-hidden shadow-lg">
-                <table className="w-full text-left">
+            <div className="bg-[#18181B] rounded-xl border border-white/10 shadow-lg overflow-x-auto">
+                <table className="w-full text-left min-w-[640px]">
                     <thead className="bg-[#201f22] border-b border-white/10">
                         <tr>
                             <th className="p-4 text-xs font-mono text-gray-400">ID</th>

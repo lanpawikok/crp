@@ -152,17 +152,18 @@ function NetworkBadge({ activeNetwork, onSelectNetwork }) {
     }, []);
 
     return (
-        <div ref={dropdownRef} className="relative hidden lg:block">
+        <div ref={dropdownRef} className="relative">
             <button
                 type="button"
                 onClick={() => setIsOpen((prev) => !prev)}
-                className="flex items-center gap-2 bg-[#201f22] hover:bg-[#2a2a2c] px-3 py-1.5 rounded-full border border-white/10 text-xs font-medium text-[#e5e1e4] font-mono transition-colors cursor-pointer"
+                className="flex items-center gap-1.5 sm:gap-2 bg-[#201f22] hover:bg-[#2a2a2c] px-2 py-1 sm:px-3 sm:py-1.5 rounded-full border border-white/10 text-xs font-medium text-[#e5e1e4] font-mono transition-colors cursor-pointer"
                 title="Switch Solana Network (Devnet / Testnet / Mainnet)"
                 aria-haspopup="listbox"
                 aria-expanded={isOpen}
             >
                 <span className={`w-2 h-2 rounded-full ${current.color} animate-pulse`}></span>
-                <span>{current.name}</span>
+                <span className="hidden sm:inline">{current.name}</span>
+                <span className="sm:hidden">{current.shortName}</span>
                 <span className="material-symbols-outlined text-[16px] text-gray-400">expand_more</span>
             </button>
 
@@ -337,7 +338,7 @@ function CustomWalletButton() {
                 <button
                     onClick={handleOpenWalletModal}
                     disabled={connecting}
-                    className="bg-[#4f46e5] text-white px-5 py-2 rounded-full text-xs font-mono hover:bg-[#4d44e3] transition-colors flex items-center gap-2 shadow-md border border-[#c3c0ff]/20 disabled:opacity-50 cursor-pointer"
+                    className="bg-[#4f46e5] text-white px-3.5 py-2 sm:px-5 rounded-full text-xs font-mono hover:bg-[#4d44e3] transition-colors flex items-center gap-2 shadow-md border border-[#c3c0ff]/20 disabled:opacity-50 cursor-pointer"
                 >
                     <span className="material-symbols-outlined text-[16px]">account_balance_wallet</span>
                     {connecting ? 'Connecting...' : 'Connect Wallet'}
@@ -350,10 +351,11 @@ function CustomWalletButton() {
         <div className="flex items-center gap-1.5 bg-[#18181B] border border-white/10 rounded-full p-1 pl-1.5 shadow-md">
             <button
                 onClick={handleOpenWalletModal}
-                className="flex items-center gap-2 bg-[#201f22] hover:bg-[#2a2a2c] px-3 py-1.5 rounded-full text-xs font-mono text-[#e5e1e4] border border-white/5 cursor-pointer"
+                title={publicKey.toBase58()}
+                className="flex items-center gap-2 bg-[#201f22] hover:bg-[#2a2a2c] px-2.5 py-1.5 sm:px-3 rounded-full text-xs font-mono text-[#e5e1e4] border border-white/5 cursor-pointer"
             >
                 {wallet?.adapter?.icon && <img src={wallet.adapter.icon} alt={wallet.adapter.name} className="w-4 h-4 rounded-full" />}
-                <span>{publicKey.toBase58().slice(0, 4)}...{publicKey.toBase58().slice(-4)}</span>
+                <span className="hidden sm:inline">{publicKey.toBase58().slice(0, 4)}...{publicKey.toBase58().slice(-4)}</span>
             </button>
             <button
                 onClick={() => disconnect()}
@@ -841,15 +843,15 @@ function UtilifyApp({ activeNetwork, onSelectNetwork }) {
             />
 
             <nav className="fixed top-0 w-full z-50 bg-[#18181B]/80 backdrop-blur-xl border-b border-white/10 shadow-sm">
-                <div className="flex justify-between items-center h-16 px-6 md:px-10 max-w-[1280px] mx-auto">
-                    <div className="text-2xl font-bold tracking-tighter text-[#c3c0ff]">No Trace</div>
+                <div className="flex justify-between items-center h-14 sm:h-16 px-4 sm:px-6 md:px-10 max-w-[1280px] mx-auto">
+                    <div className="text-lg sm:text-2xl font-bold tracking-tighter text-[#c3c0ff] shrink-0">No Trace</div>
 
-                    <div className="hidden md:flex space-x-6 text-base">
+                    <div className="flex space-x-1 sm:space-x-6 text-sm sm:text-base">
                         {['swap', 'deposit'].map((tab) => (
                             <button
                                 key={tab}
                                 onClick={() => setActiveTab(tab)}
-                                className={`px-3 py-1 rounded transition-colors cursor-pointer capitalize ${
+                                className={`px-2 py-1 sm:px-3 rounded transition-colors cursor-pointer capitalize ${
                                     activeTab === tab
                                         ? 'text-[#c3c0ff] border-b-2 border-[#c3c0ff] font-medium'
                                         : 'text-[#c7c4d8] hover:text-white'
@@ -860,23 +862,27 @@ function UtilifyApp({ activeNetwork, onSelectNetwork }) {
                         ))}
                     </div>
 
-                    <div className="flex items-center gap-3 md:gap-4">
+                    <div className="flex items-center gap-2 sm:gap-3 md:gap-4">
                         {auth?.user && (
                             <div className="flex items-center gap-3">
                                 {auth.user.email === 'admin@notracefi.test' && (
                                     <Link
                                         href="/admin/users"
-                                        className="bg-[#4f46e5] text-white px-4 py-1.5 rounded-lg text-xs font-medium hover:bg-[#4d44e3] transition-colors flex items-center gap-1.5 border border-[#c3c0ff]/20"
+                                        title="Manage Users"
+                                        className="bg-[#4f46e5] text-white px-2.5 py-1.5 sm:px-4 rounded-lg text-xs font-medium hover:bg-[#4d44e3] transition-colors flex items-center gap-1.5 border border-[#c3c0ff]/20"
                                     >
-                                        <span className="material-symbols-outlined text-[16px]">group</span> Manage Users
+                                        <span className="material-symbols-outlined text-[16px]">group</span>
+                                        <span className="hidden lg:inline">Manage Users</span>
                                     </Link>
                                 )}
-                                <span className="text-sm text-gray-400 hidden sm:inline">{auth.user.name}</span>
+                                <span className="text-sm text-gray-400 hidden md:inline">{auth.user.name}</span>
                                 <button
                                     onClick={handleLogout}
-                                    className="text-red-400 hover:text-red-300 hover:bg-red-400/10 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 border border-red-400/20 cursor-pointer"
+                                    title="Logout"
+                                    className="text-red-400 hover:text-red-300 hover:bg-red-400/10 px-2 py-1.5 sm:px-3 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 border border-red-400/20 cursor-pointer"
                                 >
-                                    Logout
+                                    <span className="material-symbols-outlined text-[16px]">logout</span>
+                                    <span className="hidden sm:inline">Logout</span>
                                 </button>
                             </div>
                         )}
@@ -1151,7 +1157,7 @@ function UtilifyApp({ activeNetwork, onSelectNetwork }) {
                                     </div>
                                     <div className="flex justify-between gap-3">
                                         <span className="text-[#8f8d99]">Route</span>
-                                        <span className="text-[#c7c4d8] text-right truncate max-w-[180px]" title={routeLabels.join(' → ')}>
+                                        <span className="text-[#c7c4d8] text-right truncate max-w-[110px] sm:max-w-[180px]" title={routeLabels.join(' → ')}>
                                             {routeLabels.length > 0
                                                 ? (routeLabels.length > 2 ? `${routeLabels.slice(0, 2).join(' → ')} +${routeLabels.length - 2}` : routeLabels.join(' → '))
                                                 : 'Jupiter'}
