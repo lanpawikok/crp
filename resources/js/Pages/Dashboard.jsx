@@ -887,7 +887,7 @@ function UtilifyApp({ activeNetwork, onSelectNetwork }) {
                                 </div>
                                 <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between text-[11px] font-mono text-[#a9a5c9]">
                                     <span className="truncate max-w-[130px]">
-                                        {publicKey ? `${walletAddress.slice(0, 4)}...${walletAddress.slice(-4)}` : 'Belum Terhubung'}
+                                        {publicKey ? `${walletAddress.slice(0, 4)}...${walletAddress.slice(-4)}` : 'Didnt connected yet'}
                                     </span>
                                     <button
                                         onClick={handleTopUp}
