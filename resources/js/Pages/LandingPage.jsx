@@ -168,7 +168,7 @@ export default function LandingPage() {
                 <div className="flex justify-between items-center w-full max-w-[1280px] mx-auto py-3 sm:py-6">
                     <div className="flex items-center gap-2 sm:gap-3 group cursor-pointer">
                         <img src="/img/notracefi.jpeg" alt="NoTracefi Logo" className="w-7 h-7 sm:w-9 sm:h-9 logo-spin" />
-                        <span className="text-xl sm:text-[32px] font-bold text-[#c3c0ff] tracking-tight glow-text font-['Sora']">NOTRACEFI</span>
+                        <span className="text-xl sm:text-[32px] font-bold text-[#c3c0ff] tracking-tight glow-text font-['Sora']">NOTRACE</span>
                     </div>
                     <div className="flex items-center gap-2 sm:gap-4">
                         <button className="text-[#c4c7c8] hover:text-[#c3c0ff] transition-colors hover:bg-white/10 p-2 rounded-full duration-300">
@@ -192,13 +192,11 @@ export default function LandingPage() {
                 </div>
 
                 <h1 className="text-[34px] sm:text-[48px] md:text-[72px] text-[#c3c0ff] glow-text mb-6 max-w-4xl mx-auto tracking-tight leading-[1.1] font-['Sora'] font-semibold">
-                    NoTracefi<br />
+                    NoTrace<br />
                     
                 </h1>
 
-                <p className="text-base md:text-lg text-[#c4c7c8] max-w-2xl mx-auto mb-12 leading-relaxed opacity-80 font-['Inter']">
-                    All in one decentralized exchange for leveraging diversified funds across ecosystems, with the speed of Solana
-                </p>
+               
 
                 {/* Social Links */}
                 <div className="flex items-center gap-4 sm:gap-5 mb-12 sm:mb-20">
