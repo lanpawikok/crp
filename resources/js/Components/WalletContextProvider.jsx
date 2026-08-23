@@ -1,25 +1,28 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useCallback } from 'react';
 import { ConnectionProvider, WalletProvider } from '@solana/wallet-adapter-react';
 import { WalletModalProvider } from '@solana/wallet-adapter-react-ui';
-import { PhantomWalletAdapter, SolflareWalletAdapter } from '@solana/wallet-adapter-wallets';
 import { clusterApiUrl } from '@solana/web3.js';
 
-// Import the built-in Solana modal CSS
 import '@solana/wallet-adapter-react-ui/styles.css';
 
 export default function WalletContextProvider({ children }) {
-  // Use the free 'devnet' network for testing
   const endpoint = useMemo(() => clusterApiUrl('devnet'), []);
 
-  // Supported wallet options
-  const wallets = useMemo(
-    () => [new PhantomWalletAdapter(), new SolflareWalletAdapter()],
-    []
-  );
+  // Menggunakan Wallet Standard API
+  const wallets = useMemo(() => [], []);
+
+  // Menangkap error koneksi agar tidak melempar exception mentah di konsol
+  const onError = useCallback((error) => {
+    if (error.name === 'WalletConnectionError') {
+      console.warn('Koneksi wallet dibatalkan atau gagal merespons:', error.message);
+    } else {
+      console.error('Error Wallet Lainnya:', error);
+    }
+  }, []);
 
   return (
     <ConnectionProvider endpoint={endpoint}>
-      <WalletProvider wallets={wallets} autoConnect>
+      <WalletProvider wallets={wallets} onError={onError} autoConnect={false}>
         <WalletModalProvider>
           {children}
         </WalletModalProvider>

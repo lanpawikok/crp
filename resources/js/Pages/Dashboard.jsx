@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { ConnectionProvider, WalletProvider, useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { WalletModalProvider, useWalletModal } from '@solana/wallet-adapter-react-ui';
-import { SolflareWalletAdapter } from '@solana/wallet-adapter-wallets';
+import { PhantomWalletAdapter, SolflareWalletAdapter } from '@solana/wallet-adapter-wallets';
 import { WalletAdapterNetwork } from '@solana/wallet-adapter-base';
 import { Connection, LAMPORTS_PER_SOL, PublicKey, SystemProgram, Transaction, TransactionInstruction, VersionedTransaction } from '@solana/web3.js';
 import { usePage, router, Link } from '@inertiajs/react';
@@ -1448,7 +1448,10 @@ export default function Welcome() {
     const networkConfig = SOLANA_NETWORKS[activeNetwork] || SOLANA_NETWORKS.devnet;
     const endpoint = useMemo(() => networkConfig.endpoint, [networkConfig.endpoint]);
     const wallets = useMemo(
-        () => [new SolflareWalletAdapter({ network: networkConfig.network })],
+        () => [
+            new PhantomWalletAdapter({ network: networkConfig.network }),
+            new SolflareWalletAdapter({ network: networkConfig.network }),
+        ],
         [networkConfig.network]
     );
 
