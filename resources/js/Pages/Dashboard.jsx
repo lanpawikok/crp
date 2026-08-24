@@ -861,8 +861,17 @@ function UtilifyApp({ activeNetwork, onSelectNetwork }) {
 
             <nav className="fixed top-0 w-full z-50 bg-[#18181B]/80 backdrop-blur-xl border-b border-white/10 shadow-sm">
                 <div className="flex items-center h-14 sm:h-16 px-4 sm:px-6 md:px-10 max-w-[1280px] mx-auto">
-                    {/* Fixed logo — stays in place, never scrolls */}
-                    <div className="shrink-0 text-lg sm:text-2xl font-bold tracking-tighter text-[#c3c0ff]">No Trace</div>
+                   {/* Fixed logo — stays in place, never scrolls */}
+                <div className="shrink-0 flex items-center gap-2">
+                    <img 
+                        src="/img/notracefi.jpeg" 
+                        alt="No Trace Logo" 
+                        className="h-8 w-auto rounded-full object-cover" 
+                    />
+                    <span className="text-lg sm:text-2xl font-bold tracking-tighter text-[#c3c0ff]">
+                        No Trace
+                    </span>
+                </div>
 
                     {/* Scrollable header area — swipe left/right on mobile */}
                     <div className="flex-1 min-w-0 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ml-3 sm:ml-6">

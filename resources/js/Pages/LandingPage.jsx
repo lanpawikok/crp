@@ -175,7 +175,7 @@ export default function LandingPage() {
                             <span className="material-symbols-outlined text-xl sm:text-2xl">notifications</span>
                         </button>
                         <Link
-                            href="/login"
+                            href="/dashboard"
                             className="bg-[#c3c0ff] text-[#131315] px-4 py-2 sm:px-7 sm:py-2.5 rounded-full text-xs font-bold hover:bg-opacity-90 transition-all scale-95 active:opacity-80 shadow-[0_0_25px_rgba(79,70,229,0.25)] hover:shadow-[0_0_40px_rgba(79,70,229,0.35)] duration-300"
                         >
                             Connect
