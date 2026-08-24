@@ -86,7 +86,7 @@ export default function Login({ status }) {
                                 type="button"
                                 className="w-full text-left p-4 rounded-lg bg-[#1c1b1d] border border-white/10 hover:bg-[#2a2a2c] transition"
                             >
-                                🦊 MetaMask
+                                👻 Phantom
                             </button>
 
                             <button
