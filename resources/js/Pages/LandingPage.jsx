@@ -187,8 +187,8 @@ export default function LandingPage() {
             {/* Main Content */}
             <main className="flex-grow flex flex-col items-center justify-center px-4 md:px-10 py-10 sm:py-16 relative z-10 text-center">
                 <div className="glass-panel rounded-full px-5 py-1.5 mb-8 inline-flex items-center gap-2 border border-white/5 badge-glow">
-                    <span className="text-[15px]">✨</span>
-                    <span className="text-xs text-[#c4c7c8] tracking-[0.2em] uppercase font-medium">Space swap</span>
+                    <img src="/img/notracefi.jpeg" alt="NoTracefi Logo" className="w-7 h-7 sm:w-9 sm:h-9 logo-spin" />
+                    <span className="text-xs text-[#c4c7c8] tracking-[0.2em] uppercase font-medium">Private Transaction</span>
                 </div>
 
                 <h1 className="text-[34px] sm:text-[48px] md:text-[72px] text-[#c3c0ff] glow-text mb-6 max-w-4xl mx-auto tracking-tight leading-[1.1] font-['Sora'] font-semibold">
