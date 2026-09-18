@@ -923,14 +923,6 @@ function UtilifyApp({ activeNetwork, onSelectNetwork }) {
                                     <span className="text-[#8f8d99]">Wallet:</span>
                                     <span className="text-[#e5e1e4] font-medium">{balance !== null ? `${balance} SOL` : '...'}</span>
                                 </div>
-                                <span className="text-white/20">|</span>
-                                <div className="flex items-center gap-1.5" title="Your Private Pool Balance Vault ">
-                                    <span className="text-[#a9a5c9] flex items-center gap-1">
-                                        <span className="material-symbols-outlined text-[14px] text-emerald-400">shield</span>
-                                        Pool:
-                                    </span>
-                                    <span className="text-[#c3c0ff] font-medium">{privatePoolBalance !== null ? `${privatePoolBalance} SOL` : '...'}</span>
-                                </div>
                             </div>
                         )}
 
@@ -981,8 +973,8 @@ function UtilifyApp({ activeNetwork, onSelectNetwork }) {
                             )}
                         </div>
 
-                        {/* DUAL BALANCE OVERVIEW: E-WALLET BALANCE & PRIVATE POOL BALANCE */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-xl">
+                        {/* E-WALLET BALANCE OVERVIEW */}
+                        <div className="grid grid-cols-1 gap-4 max-w-xl">
                             {/* CARD 1: E-WALLET BALANCE */}
                             <div className="rounded-xl border border-white/10 bg-[#18181B]/80 backdrop-blur-md p-4 shadow-lg flex flex-col justify-between hover:border-white/20 transition-colors">
                                 <div>
@@ -1019,43 +1011,6 @@ function UtilifyApp({ activeNetwork, onSelectNetwork }) {
                                 </div>
                             </div>
 
-                            {/* CARD 2: PRIVATE POOL BALANCE (VAULT) */}
-                            <div className="rounded-xl border border-[#c3c0ff]/30 bg-[#18181B]/80 backdrop-blur-md p-4 shadow-lg flex flex-col justify-between hover:border-[#c3c0ff]/50 transition-colors relative overflow-hidden">
-                                <div className="absolute top-0 right-0 w-24 h-24 bg-[#4f46e5]/10 rounded-full blur-xl pointer-events-none" />
-                                <div>
-                                    <div className="flex items-center justify-between text-xs font-mono uppercase tracking-[0.12em] text-[#a9a5c9]">
-                                        <span className="flex items-center gap-1.5">
-                                            <span className="material-symbols-outlined text-[16px] text-emerald-400">shield</span>
-                                             Private Pool Balance
-                                        </span>
-                                        <span className="flex items-center gap-1 text-[10px] text-emerald-300 font-medium">
-                                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
-                                            On-chain Vault
-                                        </span>
-                                    </div>
-                                    <div className="mt-3">
-                                        <p className="text-2xl font-bold text-[#e5e1e4] font-mono">
-                                            {publicKey ? (privatePoolBalance !== null ? `${privatePoolBalance} SOL` : 'Loading...') : '0.000000 SOL'}
-                                        </p>
-                                        <p className="mt-0.5 text-xs text-[#8f8d99] font-mono">
-                                            {publicKey && privatePoolBalance && payTokenPrice ? `≈ $${(parseFloat(privatePoolBalance) * payTokenPrice).toFixed(2)} USD` : 'Private Pool Vault'}
-                                        </p>
-                                    </div>
-                                </div>
-                                <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between text-[11px] font-mono text-[#a9a5c9]">
-                                    <span className="text-emerald-400/90 flex items-center gap-1">
-                                        <span className="material-symbols-outlined text-[14px]">lock</span>
-                                        Protected
-                                    </span>
-                                    <button
-                                        onClick={() => setActiveTab('deposit')}
-                                        className="text-[#c3c0ff] hover:underline flex items-center gap-1 cursor-pointer"
-                                    >
-                                        <span className="material-symbols-outlined text-[14px]">add</span>
-                                        Top Up
-                                    </button>
-                                </div>
-                            </div>
                         </div>
                     </div>
 
@@ -1111,8 +1066,6 @@ function UtilifyApp({ activeNetwork, onSelectNetwork }) {
                                             <span>Pay</span>
                                             <div className="flex items-center gap-2 text-[11px]">
                                                 <span>Wallet: <strong className="text-[#e5e1e4]">{publicKey ? (balance !== null ? `${balance} SOL` : '...') : '0.00'}</strong></span>
-                                                <span className="text-white/20">•</span>
-                                                <span>Pool: <strong className="text-[#c3c0ff]">{publicKey ? (privatePoolBalance !== null ? `${privatePoolBalance} SOL` : '...') : '0.00'}</strong></span>
                                             </div>
                                         </div>
                                         <div className="flex justify-between items-center gap-4">
@@ -1234,15 +1187,6 @@ function UtilifyApp({ activeNetwork, onSelectNetwork }) {
                                             {publicKey ? (balance !== null ? `${balance} SOL` : 'Loading...') : '0.00 SOL'}
                                         </span>
                                     </div>
-                                    <div className="border-l border-white/10 pl-3.5">
-                                        <span className="text-[#a9a5c9] block text-[10px] uppercase tracking-wider flex items-center gap-1">
-                                            <span className="material-symbols-outlined text-[13px] text-emerald-400">shield</span>
-                                             Private Pool (Vault)
-                                        </span>
-                                        <span className="text-[#c3c0ff] font-bold text-sm mt-0.5 block">
-                                            {publicKey ? (privatePoolBalance !== null ? `${privatePoolBalance} SOL` : 'Loading...') : '0.000000 SOL'}
-                                        </span>
-                                    </div>
                                 </div>
 
                                 <div className="bg-[#09090B] p-4 rounded-xl border border-white/10 focus-within:border-[#c3c0ff] transition-colors">
@@ -1335,19 +1279,9 @@ function UtilifyApp({ activeNetwork, onSelectNetwork }) {
                                 <span> E-Wallet Balance This Time</span>
                                 <span className="font-mono text-[#e5e1e4]">{balance !== null ? `${balance} SOL` : 'Loading...'}</span>
                             </div>
-                            <div className="flex justify-between text-sm text-[#c7c4d8]">
-                                <span>Private Pool Balance This Time</span>
-                                <span className="font-mono text-emerald-400">{privatePoolBalance !== null ? `${privatePoolBalance} SOL` : '0.000000 SOL'}</span>
-                            </div>
                             <div className="border-t border-white/10 pt-3 flex justify-between text-base font-semibold text-[#e5e1e4]">
                                 <span> Top Up Amount</span>
                                 <span className="font-mono text-[#c3c0ff]">{Number.parseFloat(depositAmount).toFixed(6)} SOL</span>
-                            </div>
-                            <div className="flex justify-between text-xs text-[#8f8d99] font-mono">
-                                <span>Estimated New Pool Balance</span>
-                                <span className="text-emerald-300 font-semibold">
-                                    {((Number.parseFloat(privatePoolBalance || '0') || 0) + (Number.parseFloat(depositAmount || '0') || 0)).toFixed(6)} SOL
-                                </span>
                             </div>
                         </div>
 
