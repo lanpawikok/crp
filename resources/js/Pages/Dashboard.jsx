@@ -770,7 +770,7 @@ function UtilifyApp({ activeNetwork, onSelectNetwork }) {
                 [USER_VAULT_SEED, publicKey.toBytes()],
                 USER_VAULT_PROGRAM_ID
             );
-            const accountInfo = await vaultConnection.getAccountInfo(userVault);
+            const accountInfo = await vaultConnection.getAccountInfo(userVault, 'confirmed');
             const accountKeys = [
                 { pubkey: publicKey, isSigner: true, isWritable: true },
                 { pubkey: userVault, isSigner: false, isWritable: true },
@@ -794,7 +794,7 @@ function UtilifyApp({ activeNetwork, onSelectNetwork }) {
 
             const transaction = new Transaction({ feePayer: publicKey, recentBlockhash: blockhash }).add(...instructions);
             const signature = await sendTransaction(transaction, vaultConnection);
-            await vaultConnection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, 'processed');
+            await vaultConnection.confirmTransaction({ signature, blockhash, lastValidBlockHeight }, 'confirmed');
             await fetchBalances();
 
             // Optional: sync the deposit history to the Laravel server when the user is logged in
