@@ -1281,15 +1281,6 @@ function UtilifyApp({ activeNetwork, onSelectNetwork }) {
                                     )}
                                 </div>
 
-                                <button
-                                    onClick={handleDepositRequest}
-                                    disabled={isLoading || !depositAmount || parseFloat(depositAmount) <= 0}
-                                    className="w-full bg-[#4f46e5] text-white py-3.5 rounded-lg text-sm font-mono hover:bg-[#4d44e3] transition-colors flex justify-center items-center gap-2 disabled:opacity-50 cursor-pointer font-bold shadow-lg shadow-[#4f46e5]/20"
-                                >
-                                    <span className="material-symbols-outlined text-[18px]">lock</span>
-                                    {isLoading ? 'Processing Deposit...' : 'Top Up Private Pool'}
-                                </button>
-
                                 <div className="relative flex py-1 items-center">
                                     <div className="flex-grow border-t border-white/10"></div>
                                     <span className="flex-shrink mx-3 text-[11px] text-gray-500 font-mono">or</span>
